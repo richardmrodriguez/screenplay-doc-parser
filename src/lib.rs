@@ -196,6 +196,8 @@ pub mod pdf_parser {
     //! This module is responsible for interpereting a (hopefully properlyformatted)
     //! PDF document into a usable, semantically-typed ScreenplayDocument structure.
 
+    use std::ops::Not;
+
     use crate::pdf_document::ElementIndentationsInches;
     use crate::pdf_document::ElementIndentationsPoints;
     use crate::screenplay_document::SPType;
@@ -234,7 +236,6 @@ pub mod pdf_parser {
         if (new_line.line_type == Some(SPType::SP_SCENE_HEADING)) && (pdf_word.position.x >= element_indentaions_pts.right) {
             return Some(SPType::SP_SCENENUM);
         }
-        
         // first pass of Word Type -- check previous element types first
         match previous_element_type {
             SPType::SP_PARENTHETICAL => Some(previous_element_type.clone()),
@@ -272,10 +273,11 @@ pub mod pdf_parser {
             | SPType::SP_CHARACTER_EXTENSION => {
                 return Some(previous_element_type.clone());
             },
-
+            
             _ => {
                 
                 // Within Vertical Content Zone after this point
+                
                 println!("{}", pdf_word.position.y - element_indentaions_pts.top);
                 if pdf_word.position.y < element_indentaions_pts.top 
                 && pdf_word.position.y > element_indentaions_pts.bottom {
@@ -284,14 +286,16 @@ pub mod pdf_parser {
                     // TODO: This is a NAIVE implementation... probably need additional verification at some point...
                     
                     if pdf_word.position.x < element_indentaions_pts.left {
-                        Some(SPType::SP_SCENENUM)
+                        return Some(SPType::SP_SCENENUM);
                     } else if pdf_word.position.x >= element_indentaions_pts.right {
-                        Some(SPType::SP_SCENENUM)
+                        return Some(SPType::SP_SCENENUM);
                     } else {
                         
                         
                         let _within_tolerance  = |target| {
-                            if (&pdf_word.position.x - &target).abs() > position_tolerance {return false;}
+                            if (&pdf_word.position.x - &target).abs() > position_tolerance {
+                                return false;
+                            }
                             else {return true};
                         };
                         
@@ -303,22 +307,25 @@ pub mod pdf_parser {
                             if _is_int_ext_marker(&pdf_word.text, &None){
                                 return Some(SPType::SP_INT_EXT);
                             } else {
-                                println!("I am become ACTION.");
                                 return Some(SPType::SP_ACTION);
                             };
                         }
                         if _within_tolerance(element_indentaions_pts.character) {
                             return Some(SPType::SP_CHARACTER);
                         }
-                        else if _within_tolerance(element_indentaions_pts.dialogue) {return Some(SPType::SP_DIALOGUE);}
-                        else if _within_tolerance(element_indentaions_pts.parenthetical) {return Some(SPType::SP_PARENTHETICAL);}
+                        else if _within_tolerance(element_indentaions_pts.dialogue) {
+                            return Some(SPType::SP_DIALOGUE);
+                        }
+                        else if _within_tolerance(element_indentaions_pts.parenthetical) {
+                            return Some(SPType::SP_PARENTHETICAL);
+                        }
                         else {return None;}
                     };
-
+                    
                 }
                 
-                println!("Am I here?");
                 // Text is either ABOVE the top margin or BELOW the bottom margins...
+                if pdf_word.text == "17A.".to_string() {println!("PAGENUMBER FOUND!----------------");}
                 if pdf_word.position.y >= element_indentaions_pts.top {
                     let wordwidth: f64 = char_width * f64::from(pdf_word.text.len() as i32);
                     let rightedge: f64 = wordwidth + pdf_word.position.x;
@@ -328,7 +335,9 @@ pub mod pdf_parser {
                     && (pdf_word.text.ends_with(".")) {
                         return Some(SPType::SP_PAGENUM);
                     }
-                    else {return Some(SPType::NON_CONTENT_TOP);}
+                    else {
+                        return Some(SPType::NON_CONTENT_TOP);
+                    }
                 }
 
                 if pdf_word.text.contains("(MORE)") | pdf_word.text.contains("(CONTINUED)") | pdf_word.text.contains("(CONT'D)") {
@@ -467,7 +476,7 @@ pub mod pdf_parser {
                                 continue;
                             },
                             SPType::SP_SCENENUM => {
-                                
+                                println!(" ---------SCENE NUMBER -------");
                                 
                                 if pdf_word.text.contains("*") { // TODO: pass in USER REVISION MARKERS
                                     new_line.revised = true;
@@ -550,7 +559,13 @@ pub mod pdf_parser {
                 }
 
                 prev_line_y_pos = cur_y_pos;
+                if new_line.text_elements.is_empty(){
+                    continue;
+                }
                 new_page.lines.push(new_line);
+            }
+            if new_page.lines.is_empty() {
+                continue;
             }
             new_screenplay_doc.pages.push(new_page);
 
@@ -580,21 +595,37 @@ mod tests {
 
     use super::*;
 
-    fn _get_line_with_word(text: String, element_indentation: f64) -> pdf_document::Line {
-        let new_word: pdf_document::Word = _get_test_pdfword(text, element_indentation);
+    fn _get_line_with_word(text: String, element_indentation: f64, y_height_inches: Option<f64>) -> pdf_document::Line {
+        let mut new_word = pdf_document::Word::default();
+
+        if let Some(inches) = y_height_inches {
+            new_word = _get_test_pdfword(text, element_indentation, y_height_inches);
+        }
+        else {
+            new_word = _get_test_pdfword(text, element_indentation, None);
+        }
+
         let new_line:pdf_document::Line = pdf_document::Line { 
             words: vec![new_word] 
         };
         new_line
     }
 
-    fn _get_test_pdfword(text: String, element_indentation: f64) -> pdf_document::Word {
+    fn _get_test_pdfword(text: String, element_indentation: f64, y_height_inches: Option<f64>) -> pdf_document::Word {
+        let mut y_height_pts = 0.0;
+        if let Some(inches) = y_height_inches {
+            y_height_pts = 72.0 * inches;
+        }
+        else {
+            y_height_pts = 3.0 * 72.0;
+        }
+        
         let new_word: pdf_document::Word = pdf_document::Word {
             text: text.clone(), 
             text_bbox_width: text.len() as f64 * 7.2 as f64, 
             position: TextPosition {
                 x: element_indentation,
-                y: 72.0*3.0
+                y: y_height_pts
             }, 
             font_name: None, 
             font_size: 12.0, 
@@ -609,7 +640,7 @@ mod tests {
         let mut new_page = pdf_document::Page::default();
         
         let action_word  = _get_test_pdfword(
-            "Action!".to_string(), 72.0*1.5);
+            "Action!".to_string(), 72.0*1.5, None);
         let mut new_line: pdf_document::Line = pdf_document::Line::default();
         new_line.words.push(action_word);
         new_page.lines.push(new_line);
@@ -637,36 +668,79 @@ mod tests {
     }
     #[test]
     fn all_screenplay_element_types() {
+
+
+        println!(" ------ Testing Screenplay Element Types ------ ");
+        println!("");
+
         let mut mock_pdf:pdf_document::PDFDocument = PDFDocument::default();
         let mut new_page = pdf_document::Page::default();
         
         new_page.lines.push(
-            _get_line_with_word("Action!".to_string(), 72.0*1.5)
+            _get_line_with_word("Action!".to_string(), 
+            72.0*1.5, None)
         );
         new_page.lines.push(
-            _get_line_with_word("CHARACTER".to_string(), 72.0*3.7)
+            _get_line_with_word("CHARACTER".to_string(), 
+            72.0*3.7, None)
         );
         new_page.lines.push(
-            _get_line_with_word("Dialogue".to_string(), 72.0*2.5)
+            _get_line_with_word("(wryly, parenthetical)".to_string(), 72.0*3.1, None)
         );
         new_page.lines.push(
-            _get_line_with_word("(wryly, parenthetical)".to_string(), 72.0*3.1)
+            _get_line_with_word("Dialogue".to_string(), 72.0*2.5, None)
         );
+
+        // Page Number
+        new_page.lines.push(
+            _get_line_with_word("17A.".to_string(), (7.5*72.0) - (7.2 * 4.0), Some(10.0))
+        );
+
+        // Action line with SCENE NUMBER
+        let mut line_with_scenenum = pdf_document::Line::default();
+        let scene_num = _get_test_pdfword("6B".to_string(), 37.0, None);
+        let action_word = _get_test_pdfword("Action_with_scene_number".to_string(), 72.0*1.5,None);
+        line_with_scenenum.words.push(scene_num);
+        line_with_scenenum.words.push(action_word);
+        new_page.lines.push(line_with_scenenum);
+
+        //TODO: CONTINUED/MOREs
+
+        // TODO: Add TRANSITIONS??
+
+        // TODO: Title Page elements
+
+        //  TODO: Revision LABEL (Blue:mm/dd/yyyy)
+        
+        // TODO: Scene heading elements
+
+        // TODO: Each element type WITH *REVISION MARKERS*
+        
+        // TODO: Add DEFAULT INDENTATIONS for US LETTER and A4
+        // TODO: Test for A4 specifically 
+        
+        // --------------
 
         mock_pdf.pages.push(new_page);
 
         let parsed_doc = pdf_parser::get_screenplay_doc_from_pdf_obj(mock_pdf, None).unwrap();
 
+        println!("Page number: {:?}", parsed_doc.pages.first().unwrap().page_number);
+
         let lines = &parsed_doc.pages.first().unwrap()
         .lines;
+
 
         for line in lines {
             let element = line.text_elements.first().unwrap();
             println!(
-                "Text: {}, Type: {:?}",
+                "Text: {:25} | Type: {:25} | Scene Number: {:?}",
                 element.text,
-                element.element_type
-                )
+                format!("{:?}", element.element_type),
+                line.scene_number
+            );
+
+
         }
 
 
