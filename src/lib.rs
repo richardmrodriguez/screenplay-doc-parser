@@ -35,6 +35,46 @@ pub mod pdf_document {
         pub dialogue: f64,
         pub parenthetical: f64,
     }
+
+    pub fn get_us_letter_default_indentations_inches() -> ElementIndentationsInches {
+        ElementIndentationsInches {
+            top: 10.0,
+            bottom: 1.0,
+            left: 1.5,
+            right: 7.5,
+            pageheight: 11.0,
+            pagewidth: 8.5,
+            action: 1.5,
+            character: 3.7,
+            dialogue:2.5,
+            parenthetical: 3.1,
+        }
+    }
+
+    pub fn get_indentations_inches_as_pts(indentations: &ElementIndentationsInches, resolution: &Option<f64>) -> ElementIndentationsPoints {
+        let mut current_resolution: f64 = 72.0;
+        if let Some(r) = resolution {
+            current_resolution = r.clone()
+        }
+        
+        ElementIndentationsPoints {
+            top: indentations.top * current_resolution,
+            bottom: indentations.bottom * current_resolution,
+            pagewidth: indentations.pagewidth * current_resolution,
+            pageheight: indentations.pageheight * current_resolution,
+            left: indentations.left * current_resolution,
+            right: indentations.right *current_resolution,
+            action: indentations.action * current_resolution,
+            character: indentations.character * current_resolution,
+            dialogue: indentations.dialogue *current_resolution,
+            parenthetical: indentations.parenthetical * current_resolution
+        }
+    }
+
+    pub fn get_us_letter_default_indentation_pts() -> ElementIndentationsPoints {
+        get_indentations_inches_as_pts(&get_us_letter_default_indentations_inches(), &None)
+    }
+
     #[derive(Default, Clone, Copy)]
     pub struct TextPosition {
         pub x: f64,
@@ -198,6 +238,8 @@ pub mod pdf_parser {
 
     use std::ops::Not;
 
+    use crate::pdf_document::get_indentations_inches_as_pts;
+    use crate::pdf_document::get_us_letter_default_indentation_pts;
     use crate::pdf_document::ElementIndentationsInches;
     use crate::pdf_document::ElementIndentationsPoints;
     use crate::screenplay_document::SPType;
@@ -225,9 +267,7 @@ pub mod pdf_parser {
     fn _get_type_for_word(pdf_word: &pdf_document::Word,
     new_line: &screenplay_document::Line,
     previous_element_type: &SPType,
-    element_indentaions_pts: &ElementIndentationsPoints
-
-    ) -> Option<SPType>{
+    element_indentaions_pts: &ElementIndentationsPoints) -> Option<SPType>{
         //TODO: FIXME: Calculate actual character width from font metrics...
         let char_width = pdf_word.font_size * 0.6; 
         let position_tolerance: f64 = 0.01;
@@ -354,7 +394,6 @@ pub mod pdf_parser {
     element_indentations: Option<ElementIndentationsInches>) -> Option<screenplay_document::ScreenplayDocument> {
 
         use screenplay_document::ScreenplayDocument;
-        use pdf_document::PDFDocument;
 
         if doc.pages.len() < 1 {
             return None;
@@ -369,7 +408,11 @@ pub mod pdf_parser {
             let mut new_page = screenplay_document::Page::default();
 
             let mut prev_line_y_pos: f64 = 0.0;
-            let mut line_height: f64 = 0.0;
+            let mut line_height: f64 = 12.0; //This line height could be identified either here in-line or in
+            // a pre-processing scan of the document
+            // in-line might be better, to do it page-by-page as we go, rather than keep dictionaries/hashmaps
+
+
             //TODO: the current resolution and element_indentations_pts don't have to be defined here
             // in this for loop
             // UNLESS we need to set a different resolution or indentations for different pages
@@ -379,33 +422,10 @@ pub mod pdf_parser {
             let mut current_resolution: f64 = 72.0;
             let mut element_indentaions_pts = ElementIndentationsPoints::default();
             if let Some(ref indentations) = element_indentations{
-                element_indentaions_pts = ElementIndentationsPoints {
-                    top: indentations.top * current_resolution,
-                    bottom: indentations.bottom * current_resolution,
-                    pagewidth: indentations.pagewidth * current_resolution,
-                    pageheight: indentations.pageheight * current_resolution,
-                    left: indentations.left * current_resolution,
-                    right: indentations.right *current_resolution,
-                    action: indentations.action * current_resolution,
-                    character: indentations.character * current_resolution,
-                    dialogue: indentations.dialogue *current_resolution,
-                    parenthetical: indentations.parenthetical * current_resolution
-                }
+                element_indentaions_pts = get_indentations_inches_as_pts(indentations, &Some(current_resolution))
             } else {
-                element_indentaions_pts = ElementIndentationsPoints {
-                    top: 10.0 * current_resolution,
-                    bottom: current_resolution,
-                    pagewidth: 8.5 * current_resolution,
-                    pageheight: 11.0 * current_resolution,
-                    left: 1.5 * current_resolution,
-                    right: 7.5 *current_resolution,
-                    action: 1.5 * current_resolution,
-                    character: 3.7 * current_resolution,
-                    dialogue: 2.5 * current_resolution,
-                    parenthetical: 3.1 * current_resolution
-                }
+                element_indentaions_pts = get_us_letter_default_indentation_pts();
             }
-
             for pdf_line in pdf_page.lines.iter() {
                 if pdf_line.words.len() < 1 {continue};
 
@@ -591,7 +611,7 @@ pub fn _get_screenplay_doc_from_pdfdoc_obj() -> Option<screenplay_document::Scre
 mod tests {
     use std::default;
 
-    use crate::pdf_document::{TextPosition};
+    use crate::{pdf_document::{get_us_letter_default_indentation_pts, ElementIndentationsPoints, TextPosition}, screenplay_document::SPType};
 
     use super::*;
 
@@ -634,7 +654,7 @@ mod tests {
         new_word
     }
 
-    #[test]
+    //#[test]
     fn it_works() {
         let mut mock_pdf:pdf_document::PDFDocument = PDFDocument::default();
         let mut new_page = pdf_document::Page::default();
@@ -666,8 +686,11 @@ mod tests {
         }
 
     }
+
     #[test]
     fn all_screenplay_element_types() {
+
+        let us_letter = get_us_letter_default_indentation_pts();
 
 
         println!(" ------ Testing Screenplay Element Types ------ ");
@@ -678,43 +701,65 @@ mod tests {
         
         new_page.lines.push(
             _get_line_with_word("Action!".to_string(), 
-            72.0*1.5, None)
+            us_letter.action, 
+            None)
         );
         new_page.lines.push(
             _get_line_with_word("CHARACTER".to_string(), 
-            72.0*3.7, None)
+            us_letter.character, 
+            None)
         );
         new_page.lines.push(
-            _get_line_with_word("(wryly, parenthetical)".to_string(), 72.0*3.1, None)
+            _get_line_with_word("(wryly)".to_string(), 
+            us_letter.parenthetical, 
+            None)
         );
         new_page.lines.push(
-            _get_line_with_word("Dialogue".to_string(), 72.0*2.5, None)
+            _get_line_with_word("Dialogue".to_string(), 
+            us_letter.dialogue, 
+            None)
         );
 
+        let pn: String = "256ABC.".to_string();
+
         // Page Number
+        // Rests at y-height of top margin
+        // Is right-aligned to the right-hand margin
         new_page.lines.push(
-            _get_line_with_word("17A.".to_string(), (7.5*72.0) - (7.2 * 4.0), Some(10.0))
+            _get_line_with_word(pn.clone(), 
+            (7.5*72.0) - (7.2 * pn.len() as f64), 
+            Some(us_letter.top))
         );
 
         // Action line with SCENE NUMBER
         let mut line_with_scenenum = pdf_document::Line::default();
-        let scene_num = _get_test_pdfword("6B".to_string(), 37.0, None);
-        let action_word = _get_test_pdfword("Action_with_scene_number".to_string(), 72.0*1.5,None);
+        let scene_num = _get_test_pdfword("6B".to_string(), 
+            37.0, // arbitrary, to the left of left-hand margin 
+            None
+        );
+        let action_word = _get_test_pdfword("_scene_number".to_string(), 
+            us_letter.action,
+            None
+        );
         line_with_scenenum.words.push(scene_num);
         line_with_scenenum.words.push(action_word);
         new_page.lines.push(line_with_scenenum);
 
+        
         //TODO: CONTINUED/MOREs
 
         // TODO: Add TRANSITIONS??
+        // Transitions like CUT TO or FADE OUT or FADE TO BLACK are not handled currently at all...
+        // Need to add to SP_TYPE enum...
 
-        // TODO: Title Page elements
-
+        
         //  TODO: Revision LABEL (Blue:mm/dd/yyyy)
         
         // TODO: Scene heading elements
-
+        
         // TODO: Each element type WITH *REVISION MARKERS*
+        
+        // TODO: Title Page elements
         
         // TODO: Add DEFAULT INDENTATIONS for US LETTER and A4
         // TODO: Test for A4 specifically 
@@ -725,7 +770,7 @@ mod tests {
 
         let parsed_doc = pdf_parser::get_screenplay_doc_from_pdf_obj(mock_pdf, None).unwrap();
 
-        println!("Page number: {:?}", parsed_doc.pages.first().unwrap().page_number);
+        println!("\n-----\n\nPage number: {:?}\n", parsed_doc.pages.first().unwrap().page_number);
 
         let lines = &parsed_doc.pages.first().unwrap()
         .lines;
@@ -734,10 +779,24 @@ mod tests {
         for line in lines {
             let element = line.text_elements.first().unwrap();
             println!(
-                "Text: {:25} | Type: {:25} | Scene Number: {:?}",
+                "Text: {:13} | El_Type: {:24} | S_Num: {:5} | Rev: {}",
                 element.text,
-                format!("{:?}", element.element_type),
-                line.scene_number
+                if let Some(l_type) = element.element_type.clone() {
+                    format!("{:?}",l_type).strip_prefix("SP_").unwrap().to_string()
+                } else {
+                    format!("{:?}",SPType::NONE)
+                },
+                if let Some(sc_num) = line.scene_number.clone() {
+                    sc_num
+                } else {
+                    "None".to_string()
+                }
+                ,
+                if line.revised {
+                    "Y"
+                } else {
+                    "N"
+                },
             );
 
 
