@@ -272,8 +272,12 @@ pub mod pdf_parser {
         let char_width = pdf_word.font_size * 0.6; 
         let position_tolerance: f64 = 0.01;
 
+        
+        
+        
         // check current line type ...
         if (new_line.line_type == Some(SPType::SP_SCENE_HEADING)) && (pdf_word.position.x >= element_indentaions_pts.right) {
+            
             return Some(SPType::SP_SCENENUM);
         }
         // first pass of Word Type -- check previous element types first
@@ -287,16 +291,21 @@ pub mod pdf_parser {
             },
             SPType::SP_LOCATION => {
                 if pdf_word.text == "-".to_string() {
-                    return Some(previous_element_type.clone());
+                    //panic!();
+                    return Some(SPType::SP_LOCATION);
                 }
                 return Some(SPType::SP_SUBLOCATION);
                 
             },
-            SPType::SP_INT_EXT => Some(SPType::SP_LOCATION),
+            SPType::SP_INT_EXT => {
+                return Some(SPType::SP_LOCATION);
+            },
             SPType::SP_CHARACTER => {
                 if pdf_word.text.starts_with("(") {
                     return Some(SPType::SP_CHARACTER_EXTENSION);
-                } else {return Some(SPType::SP_CHARACTER);}
+                } else {
+                    return Some(SPType::SP_CHARACTER);
+                }
             },
             SPType::SP_DD_L_CHARACTER => {
                 if pdf_word.text.starts_with("(")  {
@@ -344,6 +353,7 @@ pub mod pdf_parser {
                         //ACTION
                         if _within_tolerance(element_indentaions_pts.action){
                             //TODO: FIXME: Let user PASS IN INT_EXT PATTERNS (i.e. for non-english scripts)
+                            
                             if _is_int_ext_marker(&pdf_word.text, &None){
                                 return Some(SPType::SP_INT_EXT);
                             } else {
@@ -391,12 +401,18 @@ pub mod pdf_parser {
     }
 
     pub fn get_screenplay_doc_from_pdf_obj(doc: pdf_document::PDFDocument, 
-    element_indentations: Option<ElementIndentationsInches>) -> Option<screenplay_document::ScreenplayDocument> {
+    element_indentations: Option<ElementIndentationsInches>,
+    revision_marker: Option<String>) -> Option<screenplay_document::ScreenplayDocument> {
 
         use screenplay_document::ScreenplayDocument;
 
         if doc.pages.len() < 1 {
             return None;
+        }
+
+        let mut r_marker = "*".to_string();
+        if let Some(rm) = revision_marker{
+            r_marker = rm;
         }
 
         let mut new_screenplay_doc: ScreenplayDocument = ScreenplayDocument::default();
@@ -468,9 +484,19 @@ pub mod pdf_parser {
                                 new_line.line_type = Some(SPType::SP_DUAL_CHARACTERS);
                             },
                             SPType::SP_ACTION => {
+                                if let Some(te) = new_line.text_elements.first() {
+                                    if te.text == "revised_scn".to_string() {
+
+                                        println!("COCK FUCK");
+    
+                                        panic!()
+                                    }
+                                }
                                 new_line.line_type = Some(SPType::SP_ACTION);
+                                
                             },
                             SPType::SP_INT_EXT => {
+                                
                                 new_line.line_type = Some(SPType::SP_SCENE_HEADING);
                             },
 
@@ -490,23 +516,31 @@ pub mod pdf_parser {
                             | SPType::NON_CONTENT_BOTTOM
                             | SPType::NON_CONTENT_LEFT
                             | SPType::NON_CONTENT_RIGHT => {
-                                println!("Non-Content!!!!!");
-                                println!("Current action margin: {}", element_indentaions_pts.action);
-                                println!("{} | {}", new_text_element.element_position.unwrap().x, new_text_element.element_position.unwrap().y);
+                                //println!("Non-Content!!!!!");
+                                //println!("Current action margin: {}", element_indentaions_pts.action);
+                                //println!("{} | {}", new_text_element.element_position.unwrap().x, new_text_element.element_position.unwrap().y);
                                 continue;
                             },
+                            //FIXME: add separate case for LONE ASTERISK or REVISION MARKER,
+                            // This is VERY fucking confusing otherwise...
                             SPType::SP_SCENENUM => {
-                                println!(" ---------SCENE NUMBER -------");
+                                //println!(" ---------SCENE NUMBER -------");
                                 
-                                if pdf_word.text.contains("*") { // TODO: pass in USER REVISION MARKERS
+                                if pdf_word.text.contains(&r_marker) { // TODO: pass in USER REVISION MARKERS
                                     new_line.revised = true;
                                 }
-                                new_line.scene_number = Some(pdf_word.text.trim_matches('*')
+                                let maybe_scene_num = Some(pdf_word.text.trim_matches('*')
                                 .to_string()
                                 .trim_matches('.')
                                 .to_string());
-                                new_line.line_type = Some(SPType::SP_SCENE_HEADING);
-                                previous_element_type = SPType::SP_SCENENUM;
+                                if let Some(sn) = maybe_scene_num {
+                                    if !sn.is_empty() {
+                                        new_line.scene_number = Some(sn);
+                                        new_line.line_type = Some(SPType::SP_SCENE_HEADING);
+                                        previous_element_type = SPType::SP_SCENENUM;
+                                    }
+                                }
+                                
 
                                 continue; 
                             },
@@ -558,15 +592,24 @@ pub mod pdf_parser {
                     }
                     if let Some(new_type) = new_word_type {
                         previous_element_type = new_type;
+                        
                     }
                     else {
                         previous_element_type = SPType::NONE;
                     }
+                    
                     new_line.text_elements.push(new_text_element);
-                    println!("Pushing new text element!");
+                    //println!("Pushing new text element!");
 
                     word_counter += 1;
                     
+                }
+                if let Some(txt) = new_line.text_elements.first(){
+                    if txt.text == "revised_scn".to_string() {
+                            println!("LINE TYPE: ------- {:?}", new_line.line_type);
+                            println!("ELEMENT TYPE: {:?}", txt.element_type);
+                            //panic!();
+                        }
                 }
                 //Add number of preceding blank lines to this line
                 let cur_y_pos = pdf_line.words.first().unwrap().position.y;
@@ -582,6 +625,7 @@ pub mod pdf_parser {
                 if new_line.text_elements.is_empty(){
                     continue;
                 }
+                
                 new_page.lines.push(new_line);
             }
             if new_page.lines.is_empty() {
@@ -667,6 +711,7 @@ mod tests {
         mock_pdf.pages.push(new_page);
         //println!("Adding!...");
         let parse_result_doc = pdf_parser::get_screenplay_doc_from_pdf_obj(mock_pdf, 
+        None,
         None);
         if let Some(document) = parse_result_doc {
             if let Some(first_page) = document.pages.first() {
@@ -690,7 +735,7 @@ mod tests {
     #[test]
     fn all_screenplay_element_types() {
 
-        let us_letter = get_us_letter_default_indentation_pts();
+        let indentations = get_us_letter_default_indentation_pts();
 
 
         println!(" ------ Testing Screenplay Element Types ------ ");
@@ -701,22 +746,22 @@ mod tests {
         
         new_page.lines.push(
             _get_line_with_word("Action!".to_string(), 
-            us_letter.action, 
+            indentations.action, 
             None)
         );
         new_page.lines.push(
             _get_line_with_word("CHARACTER".to_string(), 
-            us_letter.character, 
+            indentations.character, 
             None)
         );
         new_page.lines.push(
             _get_line_with_word("(wryly)".to_string(), 
-            us_letter.parenthetical, 
+            indentations.parenthetical, 
             None)
         );
         new_page.lines.push(
             _get_line_with_word("Dialogue".to_string(), 
-            us_letter.dialogue, 
+            indentations.dialogue, 
             None)
         );
 
@@ -728,60 +773,119 @@ mod tests {
         new_page.lines.push(
             _get_line_with_word(pn.clone(), 
             (7.5*72.0) - (7.2 * pn.len() as f64), 
-            Some(us_letter.top))
+            Some(indentations.top))
         );
 
+        // FIXME: ---------- This LINE is incorrectly parsed as SCENE_HEADING 
         // Action line with SCENE NUMBER
-        let mut line_with_scenenum = pdf_document::Line::default();
-        let scene_num = _get_test_pdfword("6B".to_string(), 
-            37.0, // arbitrary, to the left of left-hand margin 
+        let mut revised_line = pdf_document::Line::default();
+        
+        revised_line.words.push(_get_test_pdfword("revised_scn".to_string(), 
+            indentations.action,
             None
-        );
-        let action_word = _get_test_pdfword("_scene_number".to_string(), 
-            us_letter.action,
-            None
-        );
-        line_with_scenenum.words.push(scene_num);
-        line_with_scenenum.words.push(action_word);
-        new_page.lines.push(line_with_scenenum);
+        ));
+        revised_line.words.push(_get_test_pdfword("*".to_string(), 
+        (7.5*72.0)+(7.2*2.0), 
+        None));
+        new_page.lines.push(revised_line);
 
         
         //TODO: CONTINUED/MOREs
+        // FIXME: How do we handle these?
+        // They are part of the document content.
+        // Also, we need to let the user pass in custom (MORE)/(CONTINUED) patterns
+        // again, for non-english or non-standard support.
+        new_page.lines.push(
+            _get_line_with_word("(MORE)".to_string(), 
+            indentations.parenthetical, 
+            Some(60.0))
+        );
+        
+        // TODO: Scene heading elements
+        let mut scene_heading_line = pdf_document::Line::default();
+        scene_heading_line.words.push(
+            _get_test_pdfword(
+                "INT.".to_string(), indentations.action, 
+                None)
+        );
+        let mut last_word: String = "INT.".to_string();
+        let mut last_word_pos: f64 = scene_heading_line.words.last().unwrap().position.x;
+        let mut _get_word_with_offset_from_previous = |text: String| {
+            //println!("last_word: {}, len_in_pts: {:?}", last_word, last_word.len() as f64 * 7.2);
+            let new_x_offset = (last_word.len() as f64 * 7.2) + 7.2
+            + last_word_pos;
+            
+            //println!("offset x pos: {}", new_x_offset,);
+            let new_word =_get_test_pdfword(
+                text.clone(), 
+                new_x_offset, 
+                None);
 
-        // TODO: Add TRANSITIONS??
-        // Transitions like CUT TO or FADE OUT or FADE TO BLACK are not handled currently at all...
-        // Need to add to SP_TYPE enum...
+            last_word = text.clone();
+            last_word_pos = new_x_offset;
+            return new_word;
 
+        };
+
+        scene_heading_line.words.push(
+            _get_word_with_offset_from_previous("HOUSE".to_string(),)
+        );
+        scene_heading_line.words.push(
+            _get_word_with_offset_from_previous("-".to_string(),)
+        );
+        scene_heading_line.words.push(
+            _get_word_with_offset_from_previous("DAY".to_string(), )
+        );
+        scene_heading_line.words.push(
+            _get_word_with_offset_from_previous("-".to_string(), )
+        );
+        scene_heading_line.words.push(
+            _get_word_with_offset_from_previous("CONTINUOUS".to_string(), )
+        );
+        scene_heading_line.words.push(
+            _get_test_pdfword(
+                "*46G*".to_string(), indentations.right, None)
+        );
+        new_page.lines.push(scene_heading_line);
         
         //  TODO: Revision LABEL (Blue:mm/dd/yyyy)
         
-        // TODO: Scene heading elements
-        
-        // TODO: Each element type WITH *REVISION MARKERS*
-        
         // TODO: Title Page elements
         
-        // TODO: Add DEFAULT INDENTATIONS for US LETTER and A4
+        // TODO: Add DEFAULT INDENTATIONS for A4
         // TODO: Test for A4 specifically 
         
+        
+                // TODO: Add TRANSITIONS??
+                // Check if first word is x-position past like 3/4ths or 2/3rds of the page
+                // if it's within the VCZ, and it's a farther-than-dialogue x-position, 
+                //  AND it's the FIRST VALID TEXT ELEMENT, then it is likely a transition...
+                // Transitions like CUT TO or FADE OUT or FADE TO BLACK are not handled currently at all...
+                // Need to add to SP_TYPE enum...
         // --------------
 
         mock_pdf.pages.push(new_page);
 
-        let parsed_doc = pdf_parser::get_screenplay_doc_from_pdf_obj(mock_pdf, None).unwrap();
+        let parsed_doc = pdf_parser::get_screenplay_doc_from_pdf_obj(
+            mock_pdf, 
+            None,
+            None
+        ).unwrap();
 
         println!("\n-----\n\nPage number: {:?}\n", parsed_doc.pages.first().unwrap().page_number);
 
         let lines = &parsed_doc.pages.first().unwrap()
         .lines;
 
-
+        // TODO: panic!() for each line type that doesn't fully pass
+        // this means iterating manually... :<
         for line in lines {
-            let element = line.text_elements.first().unwrap();
+            
             println!(
-                "Text: {:13} | El_Type: {:24} | S_Num: {:5} | Rev: {}",
-                element.text,
-                if let Some(l_type) = element.element_type.clone() {
+                "LT: {:-<70} \nScene Num: {:8} \nRevised: {}",
+                
+                
+                if let Some(l_type) = line.line_type {
                     format!("{:?}",l_type).strip_prefix("SP_").unwrap().to_string()
                 } else {
                     format!("{:?}",SPType::NONE)
@@ -798,6 +902,22 @@ mod tests {
                     "N"
                 },
             );
+            println!("{:^30}|{:^8}{:^8}|{:^8}", "Element",  "x","y", "Text");
+            println!("{:-<58}", "  -");
+            //println!("---");
+            for el in &line.text_elements {
+                println!("     {:24} | {:.2}, {:.2} | '{}'",
+                    if let Some(l_type) = el.element_type.clone() {
+                        format!("{:?}",l_type).strip_prefix("SP_").unwrap().to_string()
+                    } else {
+                        format!("{:?}",SPType::NONE)
+                    },
+                    el.element_position.unwrap().x,
+                    el.element_position.unwrap().y,
+                    el.text,
+                );
+            }
+            println!("");
 
 
         }
