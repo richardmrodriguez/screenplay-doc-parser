@@ -4,6 +4,7 @@ version = "0.1.0"
 edition = "2024"
 repository = "https://github.com/richardmrodriguez/screenplay-doc-parser"
 license = "MIT"
+description = "Tools to parse Screenplay-formatted documents into semantically-typed structs."
 
 [dependencies]
 dateparser = "0.2.1"
