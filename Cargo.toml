@@ -2,6 +2,8 @@
 name = "screenplay-doc-parser-rs"
 version = "0.1.0"
 edition = "2024"
+repository = "https://github.com/richardmrodriguez/screenplay-doc-parser"
+license = "MIT"
 
 [dependencies]
 dateparser = "0.2.1"
