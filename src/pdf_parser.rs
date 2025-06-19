@@ -4,8 +4,6 @@
 use std::ops::Not;
 
 use crate::pdf_document;
-use crate::pdf_document::get_indentations_inches_as_pts;
-use crate::pdf_document::get_us_letter_default_indentation_pts;
 use crate::pdf_document::ElementIndentationsInches;
 use crate::pdf_document::ElementIndentationsPoints;
 use crate::screenplay_document::SPType;
@@ -203,9 +201,9 @@ revision_marker: Option<String>) -> Option<screenplay_document::ScreenplayDocume
         let mut current_resolution: f64 = 72.0;
         let mut element_indentaions_pts = ElementIndentationsPoints::default();
         if let Some(ref indentations) = element_indentations{
-            element_indentaions_pts = get_indentations_inches_as_pts(indentations, &Some(current_resolution))
+            element_indentaions_pts = ElementIndentationsPoints::from_inches(indentations, &Some(current_resolution));
         } else {
-            element_indentaions_pts = get_us_letter_default_indentation_pts();
+            element_indentaions_pts = ElementIndentationsPoints::us_letter_default(&Some(current_resolution));
         }
         for pdf_line in pdf_page.lines.iter() {
             if pdf_line.words.len() < 1 {continue};

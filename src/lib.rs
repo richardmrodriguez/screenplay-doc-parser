@@ -8,18 +8,18 @@ pub mod pdf_parser;
 #[cfg(test)]
 mod tests {
 
-    use crate::{pdf_document::{get_us_letter_default_indentation_pts, ElementIndentationsPoints, PDFDocument, TextPosition}, screenplay_document::SPType};
+    use crate::{pdf_document::{ElementIndentationsPoints, PDFDocument, TextPosition}, screenplay_document::SPType};
 
     use super::*;
 
-    fn _get_line_with_word(text: String, element_indentation: f64, y_height_inches: Option<f64>) -> pdf_document::Line {
+    fn _create_pdfline_with_word(text: String, element_indentation: f64, y_height_inches: Option<f64>) -> pdf_document::Line {
         let mut new_word = pdf_document::Word::default();
 
         if let Some(inches) = y_height_inches {
-            new_word = _get_test_pdfword(text, element_indentation, y_height_inches);
+            new_word = _create_pdfword(text, element_indentation, y_height_inches);
         }
         else {
-            new_word = _get_test_pdfword(text, element_indentation, None);
+            new_word = _create_pdfword(text, element_indentation, None);
         }
 
         let new_line:pdf_document::Line = pdf_document::Line { 
@@ -28,7 +28,7 @@ mod tests {
         new_line
     }
 
-    fn _get_test_pdfword(text: String, element_indentation: f64, y_height_inches: Option<f64>) -> pdf_document::Word {
+    fn _create_pdfword(text: String, element_indentation: f64, y_height_inches: Option<f64>) -> pdf_document::Word {
         let mut y_height_pts = 0.0;
         if let Some(inches) = y_height_inches {
             y_height_pts = 72.0 * inches;
@@ -56,7 +56,7 @@ mod tests {
         let mut mock_pdf:pdf_document::PDFDocument = PDFDocument::default();
         let mut new_page = pdf_document::Page::default();
         
-        let action_word  = _get_test_pdfword(
+        let action_word  = _create_pdfword(
             "Action!".to_string(), 72.0*1.5, None);
         let mut new_line: pdf_document::Line = pdf_document::Line::default();
         new_line.words.push(action_word);
@@ -95,7 +95,7 @@ mod tests {
         // they are close together like that
         // single spacing is 12.0 since the default font is 12-point courier
 
-        let indentations = get_us_letter_default_indentation_pts();
+        let indentations = ElementIndentationsPoints::us_letter_default(&None);
 
 
         println!(" ------ Testing Screenplay Element Types ------ ");
@@ -105,22 +105,22 @@ mod tests {
         let mut new_page = pdf_document::Page::default();
         
         new_page.lines.push(
-            _get_line_with_word("Action!".to_string(), 
+            _create_pdfline_with_word("Action!".to_string(), 
             indentations.action, 
             None)
         );
         new_page.lines.push(
-            _get_line_with_word("CHARACTER".to_string(), 
+            _create_pdfline_with_word("CHARACTER".to_string(), 
             indentations.character, 
             None)
         );
         new_page.lines.push(
-            _get_line_with_word("(wryly)".to_string(), 
+            _create_pdfline_with_word("(wryly)".to_string(), 
             indentations.parenthetical, 
             None)
         );
         new_page.lines.push(
-            _get_line_with_word("Dialogue".to_string(), 
+            _create_pdfline_with_word("Dialogue".to_string(), 
             indentations.dialogue, 
             None)
         );
@@ -132,13 +132,13 @@ mod tests {
         // Is right-aligned to the right-hand margin
         let mut page_num_line = pdf_document::Line::default();
         page_num_line.words.push(
-            _get_test_pdfword(
+            _create_pdfword(
                 "(26/04/25)".to_string(), 
                 indentations.character, 
                 Some(indentations.top))
         );
         page_num_line.words.push(
-            _get_test_pdfword(pn.clone(), 
+            _create_pdfword(pn.clone(), 
             (7.5*72.0) - (7.2 * pn.len() as f64), 
             Some(indentations.top))
         );
@@ -150,11 +150,11 @@ mod tests {
         // Revised line
         let mut revised_line = pdf_document::Line::default();
         
-        revised_line.words.push(_get_test_pdfword("revised_scn".to_string(), 
+        revised_line.words.push(_create_pdfword("revised_scn".to_string(), 
             indentations.action,
             None
         ));
-        revised_line.words.push(_get_test_pdfword("*".to_string(), 
+        revised_line.words.push(_create_pdfword("*".to_string(), 
         (7.5*72.0)+(7.2*2.0), 
         None));
         new_page.lines.push(revised_line);
@@ -166,7 +166,7 @@ mod tests {
         // Also, we need to let the user pass in custom (MORE)/(CONTINUED) patterns
         // again, for non-english or non-standard support.
         new_page.lines.push(
-            _get_line_with_word("(MORE)".to_string(), 
+            _create_pdfline_with_word("(MORE)".to_string(), 
             indentations.parenthetical, 
             Some(60.0))
         );
@@ -174,7 +174,7 @@ mod tests {
         // TODO: Scene heading elements
         let mut scene_heading_line = pdf_document::Line::default();
         scene_heading_line.words.push(
-            _get_test_pdfword(
+            _create_pdfword(
                 "INT.".to_string(), indentations.action, 
                 None)
         );
@@ -186,7 +186,7 @@ mod tests {
             + last_word_pos;
             
             //println!("offset x pos: {}", new_x_offset,);
-            let new_word =_get_test_pdfword(
+            let new_word =_create_pdfword(
                 text.clone(), 
                 new_x_offset, 
                 None);
@@ -213,7 +213,7 @@ mod tests {
             _get_word_with_offset_from_previous("CONTINUOUS".to_string(), )
         );
         scene_heading_line.words.push(
-            _get_test_pdfword(
+            _create_pdfword(
                 "*46G*".to_string(), indentations.right, None)
         );
         new_page.lines.push(scene_heading_line);
