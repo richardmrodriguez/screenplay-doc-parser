@@ -111,7 +111,7 @@ impl ElementIndentationsPoints {
 
 
 
-#[derive(Default, Clone, Copy)]
+#[derive(Default, Clone, Copy, Debug, PartialEq)]
 pub struct TextPosition {
     pub x: f64,
     pub y: f64,

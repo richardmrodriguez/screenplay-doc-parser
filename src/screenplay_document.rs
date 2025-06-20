@@ -1,8 +1,8 @@
 use std::{default, time::SystemTime};
-
+use uuid::{Uuid};
 use crate::pdf_document;
-use crate::pdf_document::TextPosition;
 
+#[derive(PartialEq, Clone, Copy, Debug)]
 pub enum PageFormat {
     US,
     A4,
@@ -79,7 +79,7 @@ pub enum SPType {
     _TYPECOUNT
 }
 
-#[derive(Default)]
+#[derive(Default, PartialEq, Clone, Debug)]
 pub struct TextElement {
     pub text: String,
     pub element_type: Option<SPType>,
@@ -87,7 +87,7 @@ pub struct TextElement {
     pub element_position: Option<pdf_document::TextPosition>,
 }
 
-#[derive(Default)]
+#[derive(Default, PartialEq, Clone, Debug)]
 pub struct Line {
     pub text_elements: Vec<TextElement>,
     pub scene_number: Option<String>,
@@ -98,7 +98,7 @@ pub struct Line {
 }
 
 
-#[derive(Default)]
+#[derive(Default, PartialEq, Clone, Debug)]
 pub struct Page {
     pub lines: Vec<Line>,
     pub page_number: Option<String>,
@@ -108,7 +108,26 @@ pub struct Page {
     pub page_format: Option<PageFormat>,
 }
 
-#[derive(Default)]
+#[derive(Default, PartialEq, Clone, Debug)]
+    pub struct ScreenplayCoordinate {
+        pub page: u64,
+        pub line: u64,
+    }
+
+#[derive(Default, PartialEq, Clone, Debug)]
+pub struct Scene {
+    pub id: Uuid,
+    pub start: ScreenplayCoordinate,
+    pub end: ScreenplayCoordinate, 
+    pub story_location: String,
+    pub story_sublocation: Option<String>,
+    pub story_time_of_day: String, // DAY, NIGHT, etc.
+    pub real_locations: Vec<String>,
+    pub real_sublocations: Option<Vec<String>>,
+    pub real_time_and_date: String,
+}
+
+#[derive(Default, PartialEq, Clone, Debug)]
 pub struct ScreenplayDocument {
     pub pages: Vec<Page>,
     pub revisions: Option<Vec<SystemTime>> // current (and possible previous) revision date(s) from the title page
