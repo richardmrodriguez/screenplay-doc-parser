@@ -276,7 +276,7 @@ pub struct Page {
 pub struct Scene {
     pub start: ScreenplayCoordinate,
 
-    pub number: String,
+    pub number: Option<String>,
     pub revised: bool,
 
     pub story_location: Location,

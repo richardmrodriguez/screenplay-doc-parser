@@ -1,6 +1,7 @@
 //! This module is responsible for interpereting a (hopefully properlyformatted)
 //! PDF document into a usable, semantically-typed ScreenplayDocument structure.
 
+use core::num;
 use core::time;
 use std::ops::Not;
 
@@ -458,16 +459,25 @@ time_of_day_strs: screenplay_document::TimeOfDayCollection) -> Option<screenplay
             //TODO: Create a new Scene struct --AFTER fixing the scene heading parsing...
 
             if let Some(last_line) = &new_page.lines.last() {
+                
+                if new_line.line_type == Some(SPType::SP_SCENE_HEADING) {
 
-                if let Some(num) = &last_line.scene_number {
-                    let mut new_scene = Scene {
-                        number: num.clone(),
+                    //panic!();
+                    let new_scene = Scene {
+                        number: {
+                            if let Some(number) = &new_line.scene_number.clone(){
+                                Some(number.clone())
+                            }
+                            else {
+                                None
+                            }
+                        },
                         start: ScreenplayCoordinate {
-                            page: new_screenplay_doc.pages.len() as u64,
-                            line: new_screenplay_doc.pages.last().unwrap().lines.len() as u64 + 1,
+                            page: new_screenplay_doc.pages.len() as u64 + {if new_screenplay_doc.pages.len() > 0 {1} else {0}},
+                            line: new_page.lines.len() as u64,
                             element: None
                         },
-                        revised: line_revised,
+                        revised: new_line.revised,
                         story_location: screenplay_document::Location { 
                             elements: {
                                 
@@ -479,24 +489,19 @@ time_of_day_strs: screenplay_document::TimeOfDayCollection) -> Option<screenplay
                                 .map(|el| el.clone())
                                 .collect()
                             }, 
-                            sublocations: None, 
-                            superlocation: None 
+                            sublocations: None, // TODO: ????????
+                            superlocation: None //TODO: ???????? what the fuck are these supposed to do...
                         },
-                        story_sublocation: None,
+                        story_sublocation: None, // could be multiple sublocations ...... ARGHHHHHH
                         story_time_of_day: {
                             let maybe_time: Vec<TextElement> = new_line.text_elements
                             .iter()
                             .filter(|el|el.element_type == Some(SPType::SP_TIME_OF_DAY))
                             .map(|el| el.clone())
                             .collect();
-                            if maybe_time.is_empty()
-                            {
-                                None
-                            }
-                            else {
-                                //TODO: The maybe_time is a vector, (probably a vecor of one if it's not empty)
-                                // we just have to get that element and plug its text string into the below function
-                                time_of_day_strs.get_time_of_day(&maybe_time.first().unwrap().text)
+                            match maybe_time.is_empty() {
+                                true => None,
+                                false => time_of_day_strs.get_time_of_day(&maybe_time.first().unwrap().text),
                             }
                         }
     
@@ -504,8 +509,10 @@ time_of_day_strs: screenplay_document::TimeOfDayCollection) -> Option<screenplay
                         
                     };
                     new_screenplay_doc.scenes.insert(Uuid::new_v4(), new_scene);
-                    
                 }
+                
+                    
+                
             }
             
             

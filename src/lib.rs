@@ -307,6 +307,10 @@ mod tests {
 
         }
 
+        //TODO: Add SEPARATE test function just for Scene Parsing
+
+        println!("{:#?}", parsed_doc.scenes)
+
 
 
     }
