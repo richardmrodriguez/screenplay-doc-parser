@@ -1,7 +1,10 @@
 //! This module is responsible for interpereting a (hopefully properlyformatted)
 //! PDF document into a usable, semantically-typed ScreenplayDocument structure.
 
+use core::time;
 use std::ops::Not;
+
+use uuid::Uuid;
 
 use crate::pdf_document;
 use crate::pdf_document::ElementIndentationsInches;
@@ -9,6 +12,8 @@ use crate::pdf_document::ElementIndentationsPoints;
 use crate::screenplay_document::SPType;
 
 use crate::screenplay_document;
+use crate::screenplay_document::Scene;
+use crate::screenplay_document::ScreenplayCoordinate;
 
 fn _is_int_ext_marker(text: &String, int_ext_markers: &Option<Vec<String>>) -> bool {
     if let None = int_ext_markers {
@@ -29,14 +34,43 @@ fn _is_int_ext_marker(text: &String, int_ext_markers: &Option<Vec<String>>) -> b
 
 fn _get_type_for_word(pdf_word: &pdf_document::Word,
 new_line: &screenplay_document::Line,
-previous_element_type: &SPType,
-element_indentaions_pts: &ElementIndentationsPoints) -> Option<SPType>{
+element_indentaions_pts: &ElementIndentationsPoints,
+time_of_day_strs: &screenplay_document::TimeOfDay
+) -> Option<SPType>{
+
+
+    let previous_element_type = match new_line.text_elements.last() {
+        None => SPType::NONE,
+        Some(e) => {
+
+            match e.element_type {
+                None => SPType::NONE,
+                Some(t) => t
+            }
+        }
+    };
+
     //TODO: FIXME: Calculate actual character width from font metrics...
     let char_width = pdf_word.font_size * 0.6; 
     let position_tolerance: f64 = 0.01;
 
     
-    
+    match new_line.line_type {
+        None => {},
+        Some(t) => {
+            match t {
+                SPType::SP_SCENE_HEADING => {
+                    if pdf_word.position.x >= element_indentaions_pts.right {
+                        return Some(SPType::SP_SCENENUM);
+                    }
+                },
+
+                _ => {}
+
+            }
+
+        }
+    }
     
     // check current line type ...
     if (new_line.line_type == Some(SPType::SP_SCENE_HEADING)) && (pdf_word.position.x >= element_indentaions_pts.right) {
@@ -45,21 +79,62 @@ element_indentaions_pts: &ElementIndentationsPoints) -> Option<SPType>{
     }
     // first pass of Word Type -- check previous element types first
     match previous_element_type {
-        SPType::SP_PARENTHETICAL => Some(previous_element_type.clone()),
+        SPType::SP_TIME_OF_DAY => {
+            if pdf_word.text == "-".to_string() {
+                return Some(SPType::SP_SCENE_HEADING_SEPARATOR);
+            }
+            return None;
+        }
+        SPType::SP_SCENE_HEADING_SEPARATOR => {
+            let type_before_separator = match new_line.text_elements.get(new_line.text_elements.len() - 2) {
+                None => SPType::NONE,
+                Some(t) => match t.element_type {
+                    None => SPType::NONE,
+                    Some(e) => e
+                }
+
+            };
+
+            if time_of_day_strs.is_time_of_day(&pdf_word.text) {
+                return Some(SPType::SP_TIME_OF_DAY);
+            }
+
+            match type_before_separator {
+                SPType::NONE => {return None} // ? Something has gone very wrong...
+                SPType::SP_LOCATION => {
+                    return Some(SPType::SP_SUBLOCATION)
+                }
+                SPType::SP_SUBLOCATION => {
+                    if pdf_word.text == "-".to_string() {
+                        return Some(SPType::SP_SCENE_HEADING_SEPARATOR);
+                    }
+                    return Some(SPType::SP_SUBLOCATION)
+                }
+                SPType::SP_TIME_OF_DAY | SPType::SP_SCENE_HEADING_SUB_ELEMENT => {return Some(SPType::SP_SCENE_HEADING_SUB_ELEMENT)}
+                _ => {
+                    dbg!(&pdf_word.text);
+                    dbg!(type_before_separator);
+                    //panic!();
+                    return Some(SPType::SP_SCENE_HEADING_SUB_ELEMENT)
+                }
+
+            }
+        }
+        SPType::SP_PARENTHETICAL => {return Some(previous_element_type.clone())},
         SPType::SP_SUBLOCATION => {
             if pdf_word.text == "-".to_string() {
-                return Some(previous_element_type.clone());
+                return Some(SPType::SP_SCENE_HEADING_SEPARATOR);
             }
             return Some(SPType::SP_SUBLOCATION);
         },
         SPType::SP_LOCATION => {
             if pdf_word.text == "-".to_string() {
-                return Some(SPType::SP_LOCATION);
+                return Some(SPType::SP_SCENE_HEADING_SEPARATOR);
             }
-            return Some(SPType::SP_SUBLOCATION);
+            return Some(SPType::SP_LOCATION);
             
         },
-        SPType::SP_INT_EXT => {
+        SPType::SP_ENVIRONMENT => {
             return Some(SPType::SP_LOCATION);
         },
         SPType::SP_CHARACTER => {
@@ -117,7 +192,7 @@ element_indentaions_pts: &ElementIndentationsPoints) -> Option<SPType>{
                         //TODO: FIXME: Let user PASS IN INT_EXT PATTERNS (i.e. for non-english scripts)
                         
                         if _is_int_ext_marker(&pdf_word.text, &None){
-                            return Some(SPType::SP_INT_EXT);
+                            return Some(SPType::SP_ENVIRONMENT);
                         } else {
                             return Some(SPType::SP_ACTION);
                         };
@@ -165,7 +240,8 @@ element_indentaions_pts: &ElementIndentationsPoints) -> Option<SPType>{
 
 pub fn get_screenplay_doc_from_pdf_obj(doc: pdf_document::PDFDocument, 
 element_indentations: Option<ElementIndentationsInches>,
-revision_marker: Option<String>) -> Option<screenplay_document::ScreenplayDocument> {
+revision_marker: Option<String>,
+time_of_day_strs: screenplay_document::TimeOfDay) -> Option<screenplay_document::ScreenplayDocument> {
 
     use screenplay_document::ScreenplayDocument;
 
@@ -192,6 +268,8 @@ revision_marker: Option<String>) -> Option<screenplay_document::ScreenplayDocume
         // in-line might be better, to do it page-by-page as we go, rather than keep dictionaries/hashmaps
 
 
+        
+
         //TODO: the current resolution and element_indentations_pts don't have to be defined here
         // in this for loop
         // UNLESS we need to set a different resolution or indentations for different pages
@@ -208,6 +286,7 @@ revision_marker: Option<String>) -> Option<screenplay_document::ScreenplayDocume
         for pdf_line in pdf_page.lines.iter() {
             if pdf_line.words.len() < 1 {continue};
 
+            let mut line_revised: bool = false;
             let mut new_line = screenplay_document::Line::default();
             let mut previous_element_type: SPType = SPType::NONE;
             let mut word_counter: usize = 0;
@@ -216,9 +295,9 @@ revision_marker: Option<String>) -> Option<screenplay_document::ScreenplayDocume
                 let mut new_text_element = screenplay_document::TextElement::default();
                 
                 let new_word_type: Option<SPType> = _get_type_for_word(&pdf_word, 
-                &new_line, 
-                &previous_element_type, 
-                &element_indentaions_pts);
+                &new_line,
+                &element_indentaions_pts,
+                &time_of_day_strs);
 
                 println!("New type! {:?}", new_word_type);
                 new_text_element.element_position = Some(pdf_word.position.clone());
@@ -250,7 +329,7 @@ revision_marker: Option<String>) -> Option<screenplay_document::ScreenplayDocume
                             new_line.line_type = Some(SPType::SP_ACTION);
                             
                         },
-                        SPType::SP_INT_EXT => {
+                        SPType::SP_ENVIRONMENT => {
                             
                             new_line.line_type = Some(SPType::SP_SCENE_HEADING);
                         },
@@ -281,7 +360,7 @@ revision_marker: Option<String>) -> Option<screenplay_document::ScreenplayDocume
                         SPType::SP_SCENENUM => {
                             //println!(" ---------SCENE NUMBER -------");
                             
-                            if pdf_word.text.contains(&r_marker) { // TODO: pass in USER REVISION MARKERS
+                            if pdf_word.text.contains(&r_marker) {
                                 new_line.revised = true;
                             }
                             let maybe_scene_num = Some(pdf_word.text.trim_matches('*')
@@ -302,6 +381,7 @@ revision_marker: Option<String>) -> Option<screenplay_document::ScreenplayDocume
                         SPType::SP_LINE_REVISION_MARKER =>
                         {
                             new_line.revised = true;
+                            line_revised = true;
                             previous_element_type = SPType::SP_LINE_REVISION_MARKER;
                             continue;
                         }
@@ -359,12 +439,6 @@ revision_marker: Option<String>) -> Option<screenplay_document::ScreenplayDocume
                 word_counter += 1;
                 
             }
-            if let Some(txt) = new_line.text_elements.first(){
-                if txt.text == "revised_scn".to_string() {
-                        println!("LINE TYPE: ------- {:?}", new_line.line_type);
-                        println!("ELEMENT TYPE: {:?}", txt.element_type);
-                    }
-            }
             //Add number of preceding blank lines to this line
             let cur_y_pos = pdf_line.words.first().unwrap().position.y;
             if prev_line_y_pos > 1.0 {
@@ -379,7 +453,28 @@ revision_marker: Option<String>) -> Option<screenplay_document::ScreenplayDocume
             if new_line.text_elements.is_empty(){
                 continue;
             }
-            
+
+            //TODO: Create a new Scene struct --AFTER fixing the scene heading parsing...
+            /*
+            if let Some(num) = &new_page.lines.last().unwrap().scene_number {
+                let mut new_scene = Scene {
+                    number: num.clone(),
+                    start: ScreenplayCoordinate {
+                        page: new_screenplay_doc.pages.len() as u64,
+                        line: new_screenplay_doc.pages.last().unwrap().lines.len() as u64 + 1
+                    },
+                    revised: line_revised,
+                    story_location: new_line.text_elements
+                    .iter()
+                    .filter(
+                        |el| el.element_type == SPType::SP_LOCATION
+                    ).collect()
+                    
+                }
+                new_screenplay_doc.scenes.insert(Uuid::new_v4(), new_scene);
+                
+            }
+            */
             new_page.lines.push(new_line);
         }
         if new_page.lines.is_empty() {

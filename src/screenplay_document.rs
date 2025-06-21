@@ -1,6 +1,57 @@
-use std::{default, time::SystemTime};
+use std::{collections::HashMap, default, hash::Hash, time::SystemTime};
 use uuid::{Uuid};
 use crate::pdf_document;
+
+#[derive(PartialEq, Clone, Debug)]
+pub struct TimeOfDay {
+    day: String,
+    night: String,
+    morning: String,
+    evening: String,
+    afternoon: String,
+    extras: Option<HashMap<String, String>>
+
+}
+impl Default for TimeOfDay {
+    fn default() -> Self {
+        return Self { 
+            day: "DAY".into(), 
+            night: "NIGHT".into(), 
+            morning: "MORNING".into(), 
+            evening: "EVENING".into(), 
+            afternoon: "AFTERNOON".into(), 
+            extras: None };
+    }
+}
+impl TimeOfDay {
+    pub fn is_time_of_day(&self, target: &String) -> bool {
+        if target == &self.morning
+        || target == &self.day 
+        || target == &self.afternoon
+        || target == &self.evening
+        || target == &self.night
+
+        {
+            return true;
+        }
+
+        match &self.extras {
+            None => {return false;},
+            Some(e) => {
+                for (id, string) in e {
+                    if target == string {
+                        return true;
+                    }
+                }
+            }
+        }
+
+        return false;
+            
+        
+    }
+}
+
 
 #[derive(PartialEq, Clone, Copy, Debug)]
 pub enum PageFormat {
@@ -9,6 +60,38 @@ pub enum PageFormat {
     OTHER,
 }
 
+
+/// # SPType
+/// 
+/// The various Element Types found in a Screenplay.
+/// 
+/// Types can be assigned to both individual `TextElements` and `Lines`.
+/// 
+/// Some `Line`s will only contain a single type.
+/// 
+/// An `SPType::SP_ACTION` Line will contain only `SPType::SP_ACTION` text elements, for example.
+/// 
+/// But a `SP_CHARACTER` line will potentially contain one or more `SP_CHARACTER` elements, as well as one or more `SP_CHARACTER_EXTENSION` elements:
+/// 
+/// ```text
+/// ...
+/// 
+///         CHARLIE (V.O.)
+///     I always wanted to be a gangster.
+/// 
+/// ...
+/// 
+/// ```
+/// 
+/// Notice how `CHARLIE` is the `SP_CHARACTER` and the `(V.O.)` is the `SP_CHARACTER_EXTENSION`. 
+/// 
+/// ## Scene Headings
+/// 
+/// A Scene Heading will consist of multiple types, such as the `SP_ENVIRONMENT`, meaning interior and/or exterior (INT./EXT.), the location, sublocation, and time of day:
+/// 
+/// `EXT. BASEBALL FIELD - PITCHER'S MOUND - DAY`
+/// 
+/// Scene headings can contain more element types, such as a Time Period, or multiple Sublocations.
 #[derive(Default, PartialEq, Clone, Copy, Debug)]
 #[allow(non_camel_case_types)]
 pub enum SPType {
@@ -21,13 +104,16 @@ pub enum SPType {
     SP_DIALOGUE,
     SP_TRANSITION,
 
-    // SCENE HEADING
+    /// SCENE HEADING
+    /// 
     SP_SCENE_HEADING, // begins with INT. , EXT. , or I./E.
-    SP_INT_EXT, //
+    
+    /// `INT.`, `EXT.`, `INT./EXT.`, etc.
+    SP_ENVIRONMENT, 
     SP_LOCATION,
     SP_SCENE_HEADING_SUB_ELEMENT,
-    SP_SCENE_HEADING_SEPARATOR, // Breaks up a slugline -- EXT. BASEBALL FIELD - PITCHER'S MOUND - PAST - NIGHT
-    SP_SCENE_TIMEFRAME, // PAST, PRESENT, FUTURE, arbitrary timeframe "BEFORE DINNER", "AFTER THE EXPLOSION", etc.
+    SP_SCENE_HEADING_SEPARATOR, /// Breaks up a slugline -- EXT. BASEBALL FIELD - PITCHER'S MOUND - PAST - NIGHT
+    SP_SCENE_TIMEPERIOD, // PAST, PRESENT, FUTURE, arbitrary timeframe "BEFORE DINNER", "AFTER THE EXPLOSION", etc.
     SP_SUBLOCATION,
     SP_TIME_OF_DAY,
 
@@ -112,24 +198,32 @@ pub struct Page {
     pub struct ScreenplayCoordinate {
         pub page: u64,
         pub line: u64,
+        pub element: Option<u64>
     }
 
 #[derive(Default, PartialEq, Clone, Debug)]
 pub struct Scene {
-    pub id: Uuid,
     pub start: ScreenplayCoordinate,
-    pub end: ScreenplayCoordinate, 
-    pub story_location: String,
-    pub story_sublocation: Option<String>,
+
+    pub number: String,
+    pub revised: bool,
+
+    pub story_location: Location,
+    pub story_sublocation: Option<Location>,
     pub story_time_of_day: String, // DAY, NIGHT, etc.
-    pub real_locations: Vec<String>,
-    pub real_sublocations: Option<Vec<String>>,
-    pub real_time_and_date: String,
+}
+
+#[derive(Default, PartialEq, Clone, Debug)]
+pub struct Location {
+    pub elements: Vec<TextElement>,
+    pub sublocations: Vec<Uuid> // list of IDs for other locations
+
 }
 
 #[derive(Default, PartialEq, Clone, Debug)]
 pub struct ScreenplayDocument {
     pub pages: Vec<Page>,
-    pub revisions: Option<Vec<SystemTime>> // current (and possible previous) revision date(s) from the title page
-
+    pub revisions: Option<Vec<SystemTime>>, // current (and possible previous) revision date(s) from the title page
+    pub scenes: HashMap<Uuid, Scene>,
+    pub locations: HashMap<Uuid, Location>
 }

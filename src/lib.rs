@@ -8,6 +8,8 @@ pub mod pdf_parser;
 #[cfg(test)]
 mod tests {
 
+    use std::default;
+
     use crate::{pdf_document::{ElementIndentationsPoints, PDFDocument, TextPosition}, screenplay_document::SPType};
 
     use super::*;
@@ -65,7 +67,8 @@ mod tests {
         //println!("Adding!...");
         let parse_result_doc = pdf_parser::get_screenplay_doc_from_pdf_obj(mock_pdf, 
         None,
-        None);
+        None,
+        screenplay_document::TimeOfDay::default());
         if let Some(document) = parse_result_doc {
             if let Some(first_page) = document.pages.first() {
                 println!("First page exists!");
@@ -197,21 +200,23 @@ mod tests {
 
         };
 
-        scene_heading_line.words.push(
-            _get_word_with_offset_from_previous("HOUSE".to_string(),)
-        );
-        scene_heading_line.words.push(
-            _get_word_with_offset_from_previous("-".to_string(),)
-        );
-        scene_heading_line.words.push(
-            _get_word_with_offset_from_previous("DAY".to_string(), )
-        );
-        scene_heading_line.words.push(
-            _get_word_with_offset_from_previous("-".to_string(), )
-        );
-        scene_heading_line.words.push(
-            _get_word_with_offset_from_previous("CONTINUOUS".to_string(), )
-        );
+        let mut scene_heading_words = vec![
+            "HOUSE",
+            "-",
+            "KITCHEN",
+            "-",
+            "DAY",
+            "-",
+            "CONTINUOUS"
+        ];
+
+        for word in scene_heading_words {
+            scene_heading_line.words.push(
+                _get_word_with_offset_from_previous(word.to_string())
+            );
+        }
+
+        
         scene_heading_line.words.push(
             _create_pdfword(
                 "*46G*".to_string(), indentations.right, None)
@@ -242,7 +247,8 @@ mod tests {
         let parsed_doc = pdf_parser::get_screenplay_doc_from_pdf_obj(
             mock_pdf, 
             None,
-            None
+            None,
+            screenplay_document::TimeOfDay::default()
         ).unwrap();
 
         println!(
