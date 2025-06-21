@@ -3,42 +3,73 @@ use uuid::{Uuid};
 use crate::pdf_document;
 
 #[derive(PartialEq, Clone, Debug)]
-pub struct TimeOfDay {
-    day: String,
-    night: String,
-    morning: String,
-    evening: String,
-    afternoon: String,
-    extras: Option<HashMap<String, String>>
+pub enum TimeOfDay {
+    Day(String),
+    Night(String),
+    Morning(String),
+    Evening(String),
+    Afternoon(String),
+    Extras(Option<HashMap<String, String>>)
+}
+impl TimeOfDay {
+    fn get(&self) {
+
+    }
+}
+
+
+#[derive(PartialEq, Clone, Debug)]
+pub struct TimeOfDayCollection {
+    pub day: TimeOfDay,
+    pub night: TimeOfDay,
+    pub morning: TimeOfDay,
+    pub evening: TimeOfDay,
+    pub afternoon: TimeOfDay,
+    pub extras: Option<HashMap<String, String>>
 
 }
-impl Default for TimeOfDay {
+impl Default for TimeOfDayCollection {
     fn default() -> Self {
         return Self { 
-            day: "DAY".into(), 
-            night: "NIGHT".into(), 
-            morning: "MORNING".into(), 
-            evening: "EVENING".into(), 
-            afternoon: "AFTERNOON".into(), 
+            day: TimeOfDay::Day("DAY".into()), 
+            night: TimeOfDay::Night("NIGHT".into()), 
+            morning: TimeOfDay::Morning("MORNING".into()), 
+            evening: TimeOfDay::Evening("EVENING".into()), 
+            afternoon: TimeOfDay::Afternoon("AFTERNOON".into()), 
             extras: None };
     }
 }
-impl TimeOfDay {
+impl TimeOfDayCollection {
+    
     pub fn is_time_of_day(&self, target: &String) -> bool {
-        if target == &self.morning
-        || target == &self.day 
-        || target == &self.afternoon
-        || target == &self.evening
-        || target == &self.night
+        let vars: Vec<&TimeOfDay> = vec![
+            &self.day,
+            &self.night,
+            &self.morning,
+            &self.evening,
+            &self.afternoon
+        ];
 
-        {
-            return true;
+        for time in vars {
+            match time {
+                TimeOfDay::Day(string)
+                |TimeOfDay::Night(string)
+                |TimeOfDay::Morning(string)
+                |TimeOfDay::Evening(string)
+                |TimeOfDay::Afternoon(string) => {
+                    if string == target{
+                        return true;
+                    }
+                }
+                _ => {}   
+            }
+            
         }
 
         match &self.extras {
             None => {return false;},
             Some(e) => {
-                for (id, string) in e {
+                for (_, string) in e {
                     if target == string {
                         return true;
                     }
@@ -49,6 +80,46 @@ impl TimeOfDay {
         return false;
             
         
+    }
+
+    pub fn get_time_of_day(&self, target: &String) -> Option<TimeOfDay>{
+        let vars: Vec<&TimeOfDay> = vec![
+            &self.day,
+            &self.night,
+            &self.morning,
+            &self.evening,
+            &self.afternoon
+        ];
+
+        for time in vars {
+            match time {
+                TimeOfDay::Day(string)
+                |TimeOfDay::Night(string)
+                |TimeOfDay::Morning(string)
+                |TimeOfDay::Evening(string)
+                |TimeOfDay::Afternoon(string) => {
+                    if string == target{
+                        return Some(time.clone());
+                    }
+                }
+                _ => {}   
+            }
+            
+        }
+
+        match &self.extras {
+            None => {return None;},
+            Some(e) => {
+                for (_, string) in e {
+                    if target == string {
+                        return Some(TimeOfDay::Extras(None)); // this is FUCKING horrendous what the fuck man
+                    }
+                }
+            }
+        }
+
+        return None;
+            
     }
 }
 
@@ -210,20 +281,21 @@ pub struct Scene {
 
     pub story_location: Location,
     pub story_sublocation: Option<Location>,
-    pub story_time_of_day: String, // DAY, NIGHT, etc.
+    pub story_time_of_day: Option<TimeOfDay>, // DAY, NIGHT, etc.
 }
 
 #[derive(Default, PartialEq, Clone, Debug)]
 pub struct Location {
     pub elements: Vec<TextElement>,
-    pub sublocations: Vec<Uuid> // list of IDs for other locations
+    pub sublocations: Option<Vec<Uuid>>, // list of IDs for other locations
+    pub superlocation: Option<Uuid> // 
 
 }
 
 #[derive(Default, PartialEq, Clone, Debug)]
 pub struct ScreenplayDocument {
     pub pages: Vec<Page>,
-    pub revisions: Option<Vec<SystemTime>>, // current (and possible previous) revision date(s) from the title page
+    pub revisions: Option<Vec<String>>, // current (and possible previous) revision date(s) from the title page
     pub scenes: HashMap<Uuid, Scene>,
     pub locations: HashMap<Uuid, Location>
 }

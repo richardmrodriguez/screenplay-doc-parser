@@ -14,6 +14,7 @@ use crate::screenplay_document::SPType;
 use crate::screenplay_document;
 use crate::screenplay_document::Scene;
 use crate::screenplay_document::ScreenplayCoordinate;
+use crate::screenplay_document::TextElement;
 
 fn _is_int_ext_marker(text: &String, int_ext_markers: &Option<Vec<String>>) -> bool {
     if let None = int_ext_markers {
@@ -35,7 +36,7 @@ fn _is_int_ext_marker(text: &String, int_ext_markers: &Option<Vec<String>>) -> b
 fn _get_type_for_word(pdf_word: &pdf_document::Word,
 new_line: &screenplay_document::Line,
 element_indentaions_pts: &ElementIndentationsPoints,
-time_of_day_strs: &screenplay_document::TimeOfDay
+time_of_day_strs: &screenplay_document::TimeOfDayCollection
 ) -> Option<SPType>{
 
 
@@ -241,7 +242,7 @@ time_of_day_strs: &screenplay_document::TimeOfDay
 pub fn get_screenplay_doc_from_pdf_obj(doc: pdf_document::PDFDocument, 
 element_indentations: Option<ElementIndentationsInches>,
 revision_marker: Option<String>,
-time_of_day_strs: screenplay_document::TimeOfDay) -> Option<screenplay_document::ScreenplayDocument> {
+time_of_day_strs: screenplay_document::TimeOfDayCollection) -> Option<screenplay_document::ScreenplayDocument> {
 
     use screenplay_document::ScreenplayDocument;
 
@@ -455,26 +456,59 @@ time_of_day_strs: screenplay_document::TimeOfDay) -> Option<screenplay_document:
             }
 
             //TODO: Create a new Scene struct --AFTER fixing the scene heading parsing...
-            /*
-            if let Some(num) = &new_page.lines.last().unwrap().scene_number {
-                let mut new_scene = Scene {
-                    number: num.clone(),
-                    start: ScreenplayCoordinate {
-                        page: new_screenplay_doc.pages.len() as u64,
-                        line: new_screenplay_doc.pages.last().unwrap().lines.len() as u64 + 1
-                    },
-                    revised: line_revised,
-                    story_location: new_line.text_elements
-                    .iter()
-                    .filter(
-                        |el| el.element_type == SPType::SP_LOCATION
-                    ).collect()
+
+            if let Some(last_line) = &new_page.lines.last() {
+
+                if let Some(num) = &last_line.scene_number {
+                    let mut new_scene = Scene {
+                        number: num.clone(),
+                        start: ScreenplayCoordinate {
+                            page: new_screenplay_doc.pages.len() as u64,
+                            line: new_screenplay_doc.pages.last().unwrap().lines.len() as u64 + 1,
+                            element: None
+                        },
+                        revised: line_revised,
+                        story_location: screenplay_document::Location { 
+                            elements: {
+                                
+                                new_line.text_elements
+                                .iter()
+                                .filter(
+                                    |el| el.element_type == Some(SPType::SP_LOCATION)
+                                )
+                                .map(|el| el.clone())
+                                .collect()
+                            }, 
+                            sublocations: None, 
+                            superlocation: None 
+                        },
+                        story_sublocation: None,
+                        story_time_of_day: {
+                            let maybe_time: Vec<TextElement> = new_line.text_elements
+                            .iter()
+                            .filter(|el|el.element_type == Some(SPType::SP_TIME_OF_DAY))
+                            .map(|el| el.clone())
+                            .collect();
+                            if maybe_time.is_empty()
+                            {
+                                None
+                            }
+                            else {
+                                //TODO: The maybe_time is a vector, (probably a vecor of one if it's not empty)
+                                // we just have to get that element and plug its text string into the below function
+                                time_of_day_strs.get_time_of_day(&maybe_time.first().unwrap().text)
+                            }
+                        }
+    
+                        
+                        
+                    };
+                    new_screenplay_doc.scenes.insert(Uuid::new_v4(), new_scene);
                     
                 }
-                new_screenplay_doc.scenes.insert(Uuid::new_v4(), new_scene);
-                
             }
-            */
+            
+            
             new_page.lines.push(new_line);
         }
         if new_page.lines.is_empty() {

@@ -68,7 +68,7 @@ mod tests {
         let parse_result_doc = pdf_parser::get_screenplay_doc_from_pdf_obj(mock_pdf, 
         None,
         None,
-        screenplay_document::TimeOfDay::default());
+        screenplay_document::TimeOfDayCollection::default());
         if let Some(document) = parse_result_doc {
             if let Some(first_page) = document.pages.first() {
                 println!("First page exists!");
@@ -248,7 +248,7 @@ mod tests {
             mock_pdf, 
             None,
             None,
-            screenplay_document::TimeOfDay::default()
+            screenplay_document::TimeOfDayCollection::default()
         ).unwrap();
 
         println!(
