@@ -11,11 +11,13 @@ use crate::pdf_document;
 use crate::pdf_document::ElementIndentationsInches;
 use crate::pdf_document::ElementIndentationsPoints;
 use crate::screenplay_document::Environment;
+use crate::screenplay_document::PageNumber;
 use crate::screenplay_document::SPType;
 
 use crate::screenplay_document;
 use crate::screenplay_document::Scene;
 use crate::screenplay_document::SceneHeadingElement;
+use crate::screenplay_document::SceneNumber;
 use crate::screenplay_document::ScreenplayCoordinate;
 use crate::screenplay_document::TextElement;
 
@@ -348,7 +350,7 @@ time_of_day_strs: screenplay_document::TimeOfDayCollection) -> Option<screenplay
                         //SPECIAL CASES -- DON'T add the following as TEXT ELEMENTS later down
 
                         SPType::SP_PAGENUM => {
-                            new_page.page_number = Some(pdf_word.text.clone());
+                            new_page.page_number = Some(PageNumber(pdf_word.text.clone()));
                             continue;
                         },
                         SPType::SP_PAGE_REVISION_LABEL => {
@@ -478,7 +480,7 @@ time_of_day_strs: screenplay_document::TimeOfDayCollection) -> Option<screenplay
                         let new_scene = Scene {
                             number: {
                                 if let Some(number) = &new_line.scene_number.clone(){
-                                    Some(number.clone())
+                                    Some(SceneNumber(number.clone()))
                                 }
                                 else {
                                     None

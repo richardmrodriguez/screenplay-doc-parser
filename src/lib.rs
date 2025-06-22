@@ -256,6 +256,7 @@ mod tests {
                     el.element_position.unwrap().x,
                     el.element_position.unwrap().y,
                     el.text,
+                    
                 );
             }
             println!("");

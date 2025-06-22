@@ -1,6 +1,6 @@
 [package]
 name = "screenplay-doc-parser-rs"
-version = "0.1.2"
+version = "0.1.3"
 edition = "2024"
 repository = "https://github.com/richardmrodriguez/screenplay-doc-parser"
 license = "MIT"
@@ -8,5 +8,6 @@ description = "Tools to parse Screenplay-formatted documents into semantically-t
 
 [dependencies]
 dateparser = "0.2.1"
+serde = { version = "1.0.219", features = ["derive"] }
 unicode-segmentation = "1.12.0"
 uuid = { version = "1.17.0", features = ["v4"] }

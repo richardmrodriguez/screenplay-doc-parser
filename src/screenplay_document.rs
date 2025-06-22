@@ -263,7 +263,7 @@ pub struct Line {
 #[derive(Default, PartialEq, Clone, Debug)]
 pub struct Page {
     pub lines: Vec<Line>,
-    pub page_number: Option<String>,
+    pub page_number: Option<PageNumber>,
     pub revised: bool,
     pub revision_label: Option<String>,
     pub revision_date: Option<String>,
@@ -277,7 +277,12 @@ pub struct Page {
         pub element: Option<u64>
     }
 
+#[derive(Default, PartialEq, Clone, Debug)]
+pub struct SceneNumber(pub String);
 
+
+#[derive(Default, PartialEq, Clone, Debug)]
+pub struct PageNumber(pub String);
 
 //TODO:
 // make the SP_SCENE_HEADING element take one of THESE as data,
@@ -294,6 +299,7 @@ pub enum SceneHeadingElement {
     Continuity, // CONTINUOUS
     TimePeriod, // EALIER, LATER, 1950s, WEDNESDAY, etc.
     Separator, // hyphen
+    SceneNumber,
     SlugOther,
 
 
@@ -312,7 +318,7 @@ pub enum Environment {
 pub struct Scene {
     pub start: ScreenplayCoordinate,
 
-    pub number: Option<String>,
+    pub number: Option<SceneNumber>,
     pub revised: bool,
 
     pub story_location: Location,
