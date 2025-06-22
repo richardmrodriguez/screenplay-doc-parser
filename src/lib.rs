@@ -10,7 +10,7 @@ mod tests {
 
     use std::default;
 
-    use crate::{pdf_document::{ElementIndentationsPoints, PDFDocument, TextPosition}, screenplay_document::SPType};
+    use crate::{pdf_document::{ElementIndentationsPoints, PDFDocument, TextPosition}, screenplay_document::{SPType, TimeOfDayCollection}};
 
     use super::*;
 
@@ -329,6 +329,26 @@ mod tests {
         let mut new_page = pdf_document::Page::default();
 
         let scene_heading_line = get_scene_heading_line("INT.", "HOUSE - NIGHT - CONTINUOUS", "1A", &indentations);
+
+        new_page.lines.push(scene_heading_line);
+
+
+        mock_pdf.pages.push(new_page);
+
+        let mut second_page = pdf_document::Page::default();
+        let second_line = get_scene_heading_line("EXT.", "BASEBALL FIELD - PITCHER'S MOUND - EARLIER - NIGHT", "6G", &indentations);
+
+        second_page.lines.push(second_line);
+        mock_pdf.pages.push(second_page);
+
+        let parsed_doc = pdf_parser::get_screenplay_doc_from_pdf_obj(
+            mock_pdf,
+            None, 
+        None,
+        TimeOfDayCollection::default()
+        );
+
+        println!("{:#?}", parsed_doc);
 
 
 
