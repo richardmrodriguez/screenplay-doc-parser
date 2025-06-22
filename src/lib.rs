@@ -175,53 +175,9 @@ mod tests {
         );
         
         // TODO: Scene heading elements
-        let mut scene_heading_line = pdf_document::Line::default();
-        scene_heading_line.words.push(
-            _create_pdfword(
-                "INT.".to_string(), indentations.action, 
-                None)
+        new_page.lines.push(
+            get_scene_heading_line("INT.", "HOUSE - DAY - CONTINUOUS", "*46G*", &indentations)
         );
-        let mut last_word: String = "INT.".to_string();
-        let mut last_word_pos: f64 = scene_heading_line.words.last().unwrap().position.x;
-        let mut _get_word_with_offset_from_previous = |text: String| {
-            //println!("last_word: {}, len_in_pts: {:?}", last_word, last_word.len() as f64 * 7.2);
-            let new_x_offset = (last_word.len() as f64 * 7.2) + 7.2
-            + last_word_pos;
-            
-            //println!("offset x pos: {}", new_x_offset,);
-            let new_word =_create_pdfword(
-                text.clone(), 
-                new_x_offset, 
-                None);
-
-            last_word = text.clone();
-            last_word_pos = new_x_offset;
-            return new_word;
-
-        };
-
-        let mut scene_heading_words = vec![
-            "HOUSE",
-            "-",
-            "KITCHEN",
-            "-",
-            "DAY",
-            "-",
-            "CONTINUOUS"
-        ];
-
-        for word in scene_heading_words {
-            scene_heading_line.words.push(
-                _get_word_with_offset_from_previous(word.to_string())
-            );
-        }
-
-        
-        scene_heading_line.words.push(
-            _create_pdfword(
-                "*46G*".to_string(), indentations.right, None)
-        );
-        new_page.lines.push(scene_heading_line);
 
         // TODO: Add DEFAULT INDENTATIONS for A4
         // TODO: Test for A4 specifically 
@@ -270,7 +226,7 @@ mod tests {
                 "LT: {:-<70} \nScene Num: {:8} \nRevised: {}",
                 
                 
-                if let Some(l_type) = line.line_type {
+                if let Some(l_type) = &line.line_type {
                     format!("{:?}",l_type).strip_prefix("SP_").unwrap().to_string()
                 } else {
                     format!("{:?}",SPType::NONE)
@@ -314,4 +270,69 @@ mod tests {
 
 
     }
+
+
+    fn get_scene_heading_line(env: &str, text: &str, scn_num: &str, indentations: &ElementIndentationsPoints) -> pdf_document::Line {
+        let mut scene_heading_line = pdf_document::Line::default();
+
+        scene_heading_line.words.push(
+            _create_pdfword(
+                env.to_string(), indentations.action, 
+                None)
+        );
+        let mut last_word: String = env.to_string();
+        let mut last_word_pos: f64 = scene_heading_line.words.last().unwrap().position.x;
+        let mut _get_word_with_offset_from_previous = |text: String| {
+            //println!("last_word: {}, len_in_pts: {:?}", last_word, last_word.len() as f64 * 7.2);
+            let new_x_offset = (last_word.len() as f64 * 7.2) + 7.2
+            + last_word_pos;
+            
+            //println!("offset x pos: {}", new_x_offset,);
+            let new_word =_create_pdfword(
+                text.clone(), 
+                new_x_offset, 
+                None);
+
+            last_word = text.clone();
+            last_word_pos = new_x_offset;
+            return new_word;
+
+        };
+
+        let scene_heading_words = text.split_whitespace();
+
+        for word in scene_heading_words {
+            scene_heading_line.words.push(
+                _get_word_with_offset_from_previous(word.to_string())
+            );
+        }
+
+        
+        scene_heading_line.words.push(
+            _create_pdfword(
+                scn_num.to_string(), indentations.right, None)
+        );
+
+        return scene_heading_line;
+    }
+
+
+    #[test]
+    fn scene_parsing() {
+        let indentations = ElementIndentationsPoints::us_letter_default(&None);
+
+
+        println!(" ------ Scene Parsing ------ ");
+        println!("");
+
+        let mut mock_pdf:pdf_document::PDFDocument = PDFDocument::default();
+        let mut new_page = pdf_document::Page::default();
+
+        let scene_heading_line = get_scene_heading_line("INT.", "HOUSE - NIGHT - CONTINUOUS", "1A", &indentations);
+
+
+
+
+    }
+
 }

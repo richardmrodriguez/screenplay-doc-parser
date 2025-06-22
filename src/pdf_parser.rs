@@ -10,10 +10,12 @@ use uuid::Uuid;
 use crate::pdf_document;
 use crate::pdf_document::ElementIndentationsInches;
 use crate::pdf_document::ElementIndentationsPoints;
+use crate::screenplay_document::Environment;
 use crate::screenplay_document::SPType;
 
 use crate::screenplay_document;
 use crate::screenplay_document::Scene;
+use crate::screenplay_document::SceneHeadingElement;
 use crate::screenplay_document::ScreenplayCoordinate;
 use crate::screenplay_document::TextElement;
 
@@ -35,19 +37,21 @@ fn _is_int_ext_marker(text: &String, int_ext_markers: &Option<Vec<String>>) -> b
 }
 
 fn _get_type_for_word(pdf_word: &pdf_document::Word,
-new_line: &screenplay_document::Line,
-element_indentaions_pts: &ElementIndentationsPoints,
-time_of_day_strs: &screenplay_document::TimeOfDayCollection
+    new_line: &screenplay_document::Line,
+    element_indentaions_pts: &ElementIndentationsPoints,
+    time_of_day_strs: &screenplay_document::TimeOfDayCollection
 ) -> Option<SPType>{
-
+    
+    use screenplay_document::SceneHeadingElement;
+    use screenplay_document::SPType::*;
 
     let previous_element_type = match new_line.text_elements.last() {
         None => SPType::NONE,
         Some(e) => {
 
-            match e.element_type {
+            match &e.element_type {
                 None => SPType::NONE,
-                Some(t) => t
+                Some(t) => t.clone()
             }
         }
     };
@@ -57,11 +61,11 @@ time_of_day_strs: &screenplay_document::TimeOfDayCollection
     let position_tolerance: f64 = 0.01;
 
     
-    match new_line.line_type {
+    match &new_line.line_type {
         None => {},
         Some(t) => {
             match t {
-                SPType::SP_SCENE_HEADING => {
+                SPType::SP_SCENE_HEADING(_) => {
                     if pdf_word.position.x >= element_indentaions_pts.right {
                         return Some(SPType::SP_SCENENUM);
                     }
@@ -75,69 +79,74 @@ time_of_day_strs: &screenplay_document::TimeOfDayCollection
     }
     
     // check current line type ...
-    if (new_line.line_type == Some(SPType::SP_SCENE_HEADING)) && (pdf_word.position.x >= element_indentaions_pts.right) {
+    if (new_line.line_type == Some(SPType::SP_SCENE_HEADING(SceneHeadingElement::Line))) && (pdf_word.position.x >= element_indentaions_pts.right) {
         
         return Some(SPType::SP_SCENENUM);
     }
+
+
+
     // first pass of Word Type -- check previous element types first
     match previous_element_type {
-        SPType::SP_TIME_OF_DAY => {
+        SP_SCENE_HEADING(SceneHeadingElement::TimeOfDay) => {
             if pdf_word.text == "-".to_string() {
-                return Some(SPType::SP_SCENE_HEADING_SEPARATOR);
+                return Some(SPType::SP_SCENE_HEADING(SceneHeadingElement::Separator));
             }
             return None;
         }
-        SPType::SP_SCENE_HEADING_SEPARATOR => {
+        SPType::SP_SCENE_HEADING(SceneHeadingElement::Separator) => {
             let type_before_separator = match new_line.text_elements.get(new_line.text_elements.len() - 2) {
                 None => SPType::NONE,
-                Some(t) => match t.element_type {
+                Some(t) => match &t.element_type {
                     None => SPType::NONE,
-                    Some(e) => e
+                    Some(e) => e.clone()
                 }
 
             };
 
             if time_of_day_strs.is_time_of_day(&pdf_word.text) {
-                return Some(SPType::SP_TIME_OF_DAY);
+                return Some(SP_SCENE_HEADING(SceneHeadingElement::TimeOfDay));
             }
 
             match type_before_separator {
                 SPType::NONE => {return None} // ? Something has gone very wrong...
-                SPType::SP_LOCATION => {
-                    return Some(SPType::SP_SUBLOCATION)
+                SPType::SP_SCENE_HEADING(SceneHeadingElement::Location) => {
+                    return Some(SP_SCENE_HEADING(SceneHeadingElement::SubLocation))
                 }
-                SPType::SP_SUBLOCATION => {
+                SPType::SP_SCENE_HEADING(SceneHeadingElement::Location) => {
                     if pdf_word.text == "-".to_string() {
-                        return Some(SPType::SP_SCENE_HEADING_SEPARATOR);
+                        return Some(SP_SCENE_HEADING(SceneHeadingElement::Separator));
                     }
-                    return Some(SPType::SP_SUBLOCATION)
+                    return Some(SP_SCENE_HEADING(SceneHeadingElement::SubLocation))
                 }
-                SPType::SP_TIME_OF_DAY | SPType::SP_SCENE_HEADING_SUB_ELEMENT => {return Some(SPType::SP_SCENE_HEADING_SUB_ELEMENT)}
+                SPType::SP_SCENE_HEADING(SceneHeadingElement::TimeOfDay) | SP_SCENE_HEADING(SceneHeadingElement::SlugOther) => {
+                    return Some(SP_SCENE_HEADING(SceneHeadingElement::SlugOther))
+                }
                 _ => {
                     dbg!(&pdf_word.text);
                     dbg!(type_before_separator);
                     //panic!();
-                    return Some(SPType::SP_SCENE_HEADING_SUB_ELEMENT)
+                    return Some(SP_SCENE_HEADING(SceneHeadingElement::SlugOther))
                 }
 
             }
         }
         SPType::SP_PARENTHETICAL => {return Some(previous_element_type.clone())},
-        SPType::SP_SUBLOCATION => {
+        SPType::SP_SCENE_HEADING(SceneHeadingElement::SubLocation) => {
             if pdf_word.text == "-".to_string() {
-                return Some(SPType::SP_SCENE_HEADING_SEPARATOR);
+                return Some(SP_SCENE_HEADING(SceneHeadingElement::Separator));
             }
-            return Some(SPType::SP_SUBLOCATION);
+            return Some(SP_SCENE_HEADING(SceneHeadingElement::SubLocation));
         },
-        SPType::SP_LOCATION => {
+        SPType::SP_SCENE_HEADING(SceneHeadingElement::Location)=> {
             if pdf_word.text == "-".to_string() {
-                return Some(SPType::SP_SCENE_HEADING_SEPARATOR);
+                return Some(SP_SCENE_HEADING(SceneHeadingElement::Separator));
             }
-            return Some(SPType::SP_LOCATION);
+            return Some(SP_SCENE_HEADING(SceneHeadingElement::Location));
             
         },
-        SPType::SP_ENVIRONMENT => {
-            return Some(SPType::SP_LOCATION);
+        SP_SCENE_HEADING(SceneHeadingElement::Environment) => {
+            return Some(SP_SCENE_HEADING(SceneHeadingElement::Location));
         },
         SPType::SP_CHARACTER => {
             if pdf_word.text.starts_with("(") {
@@ -194,7 +203,7 @@ time_of_day_strs: &screenplay_document::TimeOfDayCollection
                         //TODO: FIXME: Let user PASS IN INT_EXT PATTERNS (i.e. for non-english scripts)
                         
                         if _is_int_ext_marker(&pdf_word.text, &None){
-                            return Some(SPType::SP_ENVIRONMENT);
+                            return Some(SPType::SP_SCENE_HEADING(SceneHeadingElement::Environment));
                         } else {
                             return Some(SPType::SP_ACTION);
                         };
@@ -331,9 +340,9 @@ time_of_day_strs: screenplay_document::TimeOfDayCollection) -> Option<screenplay
                             new_line.line_type = Some(SPType::SP_ACTION);
                             
                         },
-                        SPType::SP_ENVIRONMENT => {
-                            
-                            new_line.line_type = Some(SPType::SP_SCENE_HEADING);
+                        SPType::SP_SCENE_HEADING(SceneHeadingElement::Environment) => {
+                            use screenplay_document::SceneHeadingElement;
+                            new_line.line_type = Some(SPType::SP_SCENE_HEADING(SceneHeadingElement::Line));
                         },
 
                         //SPECIAL CASES -- DON'T add the following as TEXT ELEMENTS later down
@@ -372,7 +381,8 @@ time_of_day_strs: screenplay_document::TimeOfDayCollection) -> Option<screenplay
                             if let Some(sn) = maybe_scene_num {
                                 if !sn.is_empty() {
                                     new_line.scene_number = Some(sn);
-                                    new_line.line_type = Some(SPType::SP_SCENE_HEADING);
+                                    use screenplay_document::SceneHeadingElement;
+                                    new_line.line_type = Some(SPType::SP_SCENE_HEADING(SceneHeadingElement::Line));
                                     previous_element_type = SPType::SP_SCENENUM;
                                 }
                             }
@@ -427,7 +437,7 @@ time_of_day_strs: screenplay_document::TimeOfDayCollection) -> Option<screenplay
                         
                     };
                 }
-                if let Some(new_type) = new_word_type {
+                if let Some(new_type) = new_word_type.clone() {
                     previous_element_type = new_type;
                     
                 }
@@ -459,57 +469,62 @@ time_of_day_strs: screenplay_document::TimeOfDayCollection) -> Option<screenplay
             //TODO: Create a new Scene struct --AFTER fixing the scene heading parsing...
 
             if let Some(last_line) = &new_page.lines.last() {
-                
-                if new_line.line_type == Some(SPType::SP_SCENE_HEADING) {
 
-                    //panic!();
-                    let new_scene = Scene {
-                        number: {
-                            if let Some(number) = &new_line.scene_number.clone(){
-                                Some(number.clone())
-                            }
-                            else {
-                                None
-                            }
-                        },
-                        start: ScreenplayCoordinate {
-                            page: new_screenplay_doc.pages.len() as u64 + {if new_screenplay_doc.pages.len() > 0 {1} else {0}},
-                            line: new_page.lines.len() as u64,
-                            element: None
-                        },
-                        revised: new_line.revised,
-                        story_location: screenplay_document::Location { 
-                            elements: {
-                                
-                                new_line.text_elements
+                match new_line.line_type {
+                    None => {},
+                    Some(SPType::SP_SCENE_HEADING(_)) => {
+
+                        //panic!();
+                        let new_scene = Scene {
+                            number: {
+                                if let Some(number) = &new_line.scene_number.clone(){
+                                    Some(number.clone())
+                                }
+                                else {
+                                    None
+                                }
+                            },
+                            start: ScreenplayCoordinate {
+                                page: new_screenplay_doc.pages.len() as u64 + {if new_screenplay_doc.pages.len() > 0 {1} else {0}},
+                                line: new_page.lines.len() as u64,
+                                element: None
+                            },
+                            revised: new_line.revised,
+                            story_location: screenplay_document::Location { 
+                                elements: {
+                                    
+                                    new_line.text_elements
+                                    .iter()
+                                    .filter(
+                                        |el| el.element_type == Some(SPType::SP_SCENE_HEADING(SceneHeadingElement::Location))
+                                    )
+                                    .map(|el| el.clone())
+                                    .collect()
+                                }, 
+                                sublocations: None, // TODO: ????????
+                                superlocation: None //TODO: ???????? what the fuck are these supposed to do...
+                            },
+                            story_sublocation: None, // could be multiple sublocations ...... ARGHHHHHH
+                            story_time_of_day: {
+                                let maybe_time: Vec<TextElement> = new_line.text_elements
                                 .iter()
-                                .filter(
-                                    |el| el.element_type == Some(SPType::SP_LOCATION)
-                                )
+                                .filter(|el|el.element_type == Some(SPType::SP_SCENE_HEADING(SceneHeadingElement::TimeOfDay)))
                                 .map(|el| el.clone())
-                                .collect()
-                            }, 
-                            sublocations: None, // TODO: ????????
-                            superlocation: None //TODO: ???????? what the fuck are these supposed to do...
-                        },
-                        story_sublocation: None, // could be multiple sublocations ...... ARGHHHHHH
-                        story_time_of_day: {
-                            let maybe_time: Vec<TextElement> = new_line.text_elements
-                            .iter()
-                            .filter(|el|el.element_type == Some(SPType::SP_TIME_OF_DAY))
-                            .map(|el| el.clone())
-                            .collect();
-                            match maybe_time.is_empty() {
-                                true => None,
-                                false => time_of_day_strs.get_time_of_day(&maybe_time.first().unwrap().text),
+                                .collect();
+                                match maybe_time.is_empty() {
+                                    true => None,
+                                    false => time_of_day_strs.get_time_of_day(&maybe_time.first().unwrap().text),
+                                }
                             }
-                        }
-    
-                        
-                        
-                    };
-                    new_screenplay_doc.scenes.insert(Uuid::new_v4(), new_scene);
+        
+                            
+                            
+                        };
+                        new_screenplay_doc.scenes.insert(Uuid::new_v4(), new_scene);
+                    },
+                    _ => {}
                 }
+                
                 
                     
                 

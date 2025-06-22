@@ -131,7 +131,10 @@ pub enum PageFormat {
     OTHER,
 }
 
-
+// FIXME: TODO: Collapse the SPTypes, so that
+// LINE TYPE variants take in specialized SUBTYPE enum variants
+// I.E. each SCENE_HEADING TextElement will take in a SluglineElement as data
+// each 
 /// # SPType
 /// 
 /// The various Element Types found in a Screenplay.
@@ -163,7 +166,9 @@ pub enum PageFormat {
 /// `EXT. BASEBALL FIELD - PITCHER'S MOUND - DAY`
 /// 
 /// Scene headings can contain more element types, such as a Time Period, or multiple Sublocations.
-#[derive(Default, PartialEq, Clone, Copy, Debug)]
+#[derive(Default, Clone, Debug,
+    Copy, PartialEq, )]
+#[repr(u8)]
 #[allow(non_camel_case_types)]
 pub enum SPType {
     SP_ACTION = 0,
@@ -177,16 +182,16 @@ pub enum SPType {
 
     /// SCENE HEADING
     /// 
-    SP_SCENE_HEADING, // begins with INT. , EXT. , or I./E.
+    SP_SCENE_HEADING(SceneHeadingElement), // begins with INT. , EXT. , or I./E.
     
     /// `INT.`, `EXT.`, `INT./EXT.`, etc.
-    SP_ENVIRONMENT, 
-    SP_LOCATION,
-    SP_SCENE_HEADING_SUB_ELEMENT,
-    SP_SCENE_HEADING_SEPARATOR, /// Breaks up a slugline -- EXT. BASEBALL FIELD - PITCHER'S MOUND - PAST - NIGHT
-    SP_SCENE_TIMEPERIOD, // PAST, PRESENT, FUTURE, arbitrary timeframe "BEFORE DINNER", "AFTER THE EXPLOSION", etc.
-    SP_SUBLOCATION,
-    SP_TIME_OF_DAY,
+    //SP_ENVIRONMENT, 
+    //SP_LOCATION,
+    //SP_SCENE_HEADING_SUB_ELEMENT,
+    //SP_SCENE_HEADING_SEPARATOR, /// Breaks up a slugline -- EXT. BASEBALL FIELD - PITCHER'S MOUND - PAST - NIGHT
+    //SP_SCENE_TIMEPERIOD, // PAST, PRESENT, FUTURE, arbitrary timeframe "BEFORE DINNER", "AFTER THE EXPLOSION", etc.
+    //SP_SUBLOCATION,
+    //SP_TIME_OF_DAY,
 
     SP_SHOT_ANGLE, // SHOT or ANGLE on something, NOT a full scene heading / location
 
@@ -271,6 +276,37 @@ pub struct Page {
         pub line: u64,
         pub element: Option<u64>
     }
+
+
+
+//TODO:
+// make the SP_SCENE_HEADING element take one of THESE as data,
+// instead of having the scene elements flattened out among the SP_TYPEs
+// maybe also do this technique with CHARACTER, DIALOGUE, etc. , 
+// basically make each element have the LINE TYPE, which contains the ELEMENT TYPE as data...
+#[derive(Clone, Debug, Copy, PartialEq)]
+pub enum SceneHeadingElement {
+    Line, // The Line Itself
+    Environment,
+    Location,
+    SubLocation,
+    TimeOfDay,
+    Continuity, // CONTINUOUS
+    TimePeriod, // EALIER, LATER, 1950s, WEDNESDAY, etc.
+    Separator, // hyphen
+    SlugOther,
+
+
+
+}
+
+#[derive(Clone, Debug, PartialEq)]
+pub enum Environment {
+    Int,
+    Ext,
+    Combo(Vec<Environment>),
+}
+
 
 #[derive(Default, PartialEq, Clone, Debug)]
 pub struct Scene {
