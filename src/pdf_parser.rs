@@ -11,6 +11,7 @@ use crate::pdf_document;
 use crate::pdf_document::ElementIndentationsInches;
 use crate::pdf_document::ElementIndentationsPoints;
 use crate::screenplay_document::Environment;
+use crate::screenplay_document::EnvironmentStrings;
 use crate::screenplay_document::PageNumber;
 use crate::screenplay_document::SPType;
 
@@ -21,27 +22,11 @@ use crate::screenplay_document::SceneNumber;
 use crate::screenplay_document::ScreenplayCoordinate;
 use crate::screenplay_document::TextElement;
 
-fn _is_int_ext_marker(text: &String, int_ext_markers: &Option<Vec<String>>) -> bool {
-    if let None = int_ext_markers {
-        if text.starts_with("INT.") | text.starts_with("EXT.") | text.starts_with("I./E.") {
-            return true;
-        }
-        return false;
-    }
-    if let Some(int_ext_patterns) = int_ext_markers {
-        for pat in int_ext_patterns {
-            if text.starts_with(pat) {
-                return true;
-            }
-        }
-    }
-    return false;
-}
-
 fn _get_type_for_word(pdf_word: &pdf_document::Word,
     new_line: &screenplay_document::Line,
     element_indentaions_pts: &ElementIndentationsPoints,
-    time_of_day_strs: &screenplay_document::TimeOfDayCollection
+    time_of_day_strs: &screenplay_document::TimeOfDayCollection,
+    environment_strs: &screenplay_document::EnvironmentStrings
 ) -> Option<SPType>{
     
     use screenplay_document::SceneHeadingElement;
@@ -204,8 +189,8 @@ fn _get_type_for_word(pdf_word: &pdf_document::Word,
                     if _within_tolerance(element_indentaions_pts.action){
                         //TODO: FIXME: Let user PASS IN INT_EXT PATTERNS (i.e. for non-english scripts)
                         
-                        if _is_int_ext_marker(&pdf_word.text, &None){
-                            return Some(SPType::SP_SCENE_HEADING(SceneHeadingElement::Environment));
+                        if let Some(_) = Environment::from_str(&pdf_word.text, environment_strs) {
+                            return Some(SP_SCENE_HEADING(SceneHeadingElement::Environment));
                         } else {
                             return Some(SPType::SP_ACTION);
                         };
@@ -254,7 +239,8 @@ fn _get_type_for_word(pdf_word: &pdf_document::Word,
 pub fn get_screenplay_doc_from_pdf_obj(doc: pdf_document::PDFDocument, 
 element_indentations: Option<ElementIndentationsInches>,
 revision_marker: Option<String>,
-time_of_day_strs: screenplay_document::TimeOfDayCollection) -> Option<screenplay_document::ScreenplayDocument> {
+time_of_day_strs: screenplay_document::TimeOfDayCollection,
+environtment_strs: EnvironmentStrings) -> Option<screenplay_document::ScreenplayDocument> {
 
     use screenplay_document::ScreenplayDocument;
 
@@ -310,7 +296,8 @@ time_of_day_strs: screenplay_document::TimeOfDayCollection) -> Option<screenplay
                 let new_word_type: Option<SPType> = _get_type_for_word(&pdf_word, 
                 &new_line,
                 &element_indentaions_pts,
-                &time_of_day_strs);
+                &time_of_day_strs,
+                &environtment_strs);
 
                 println!("New type! {:?}", new_word_type);
                 new_text_element.element_position = Some(pdf_word.position.clone());
@@ -475,7 +462,6 @@ time_of_day_strs: screenplay_document::TimeOfDayCollection) -> Option<screenplay
                 match new_line.line_type {
                     None => {},
                     Some(SPType::SP_SCENE_HEADING(_)) => {
-
                         //panic!();
                         let new_scene = Scene {
                             number: {
@@ -486,6 +472,14 @@ time_of_day_strs: screenplay_document::TimeOfDayCollection) -> Option<screenplay
                                     None
                                 }
                             },
+                            environment: Environment::from_str(
+                                &new_line.text_elements
+                                    .iter()
+                                    .find(|te| te.element_type == Some(SPType::SP_SCENE_HEADING(SceneHeadingElement::Environment)))
+                                    .unwrap()
+                                    .text,
+                                &environtment_strs
+                            ).unwrap(),
                             start: ScreenplayCoordinate {
                                 page: new_screenplay_doc.pages.len() as u64 + {if new_screenplay_doc.pages.len() > 0 {1} else {0}},
                                 line: new_page.lines.len() as u64,

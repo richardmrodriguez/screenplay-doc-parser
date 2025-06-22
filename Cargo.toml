@@ -1,6 +1,6 @@
 [package]
 name = "screenplay-doc-parser-rs"
-version = "0.1.3"
+version = "0.1.4"
 edition = "2024"
 repository = "https://github.com/richardmrodriguez/screenplay-doc-parser"
 license = "MIT"

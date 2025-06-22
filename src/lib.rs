@@ -10,7 +10,7 @@ mod tests {
 
     use std::default;
 
-    use crate::{pdf_document::{ElementIndentationsPoints, PDFDocument, TextPosition}, screenplay_document::{SPType, TimeOfDayCollection}};
+    use crate::{pdf_document::{ElementIndentationsPoints, PDFDocument, TextPosition}, screenplay_document::{EnvironmentStrings, SPType, TimeOfDayCollection}};
 
     use super::*;
 
@@ -68,7 +68,9 @@ mod tests {
         let parse_result_doc = pdf_parser::get_screenplay_doc_from_pdf_obj(mock_pdf, 
         None,
         None,
-        screenplay_document::TimeOfDayCollection::default());
+        screenplay_document::TimeOfDayCollection::default(),
+        EnvironmentStrings::default()
+        );
         if let Some(document) = parse_result_doc {
             if let Some(first_page) = document.pages.first() {
                 println!("First page exists!");
@@ -204,7 +206,8 @@ mod tests {
             mock_pdf, 
             None,
             None,
-            screenplay_document::TimeOfDayCollection::default()
+            screenplay_document::TimeOfDayCollection::default(),
+            EnvironmentStrings::default()
         ).unwrap();
 
         println!(
@@ -319,7 +322,7 @@ mod tests {
 
 
 
-    // not entirely sure what to specifically test here...
+    // TODO: Implement and Test FORCING Scene Numbers for scenes that aren't assigned numbers
     //
     #[test]
     fn scene_parsing() {
@@ -349,7 +352,8 @@ mod tests {
             mock_pdf,
             None, 
         None,
-        TimeOfDayCollection::default()
+        TimeOfDayCollection::default(),
+        EnvironmentStrings::default()
         );
 
         println!("{:#?}", parsed_doc);

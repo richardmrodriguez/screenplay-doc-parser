@@ -1,4 +1,5 @@
 use std::{collections::HashMap, default, hash::Hash, time::SystemTime};
+use serde::de::IntoDeserializer;
 use uuid::{Uuid};
 use crate::pdf_document;
 
@@ -241,6 +242,10 @@ pub enum SPType {
     _TYPECOUNT
 }
 
+pub struct SceneID(pub Uuid);
+pub struct PageNumID(pub Uuid);
+
+
 #[derive(Default, PartialEq, Clone, Debug)]
 pub struct TextElement {
     pub text: String,
@@ -306,18 +311,58 @@ pub enum SceneHeadingElement {
 
 }
 
+pub struct EnvironmentStrings {
+    pub int: Vec<String>,
+    pub ext: Vec<String>,
+    pub combo: Vec<String>
+}
+impl Default for EnvironmentStrings {
+    fn default() -> Self {
+        EnvironmentStrings {
+            int: vec![
+                "INT.".into()
+            ],
+            ext: vec![
+                "EXT.".into()
+            ],
+            combo: vec![
+                "INT./EXT.".into(),
+                "I./E.".into(),
+                "EXT./INT.".into(),
+                "E./I.".into()
+            ]
+        }
+    }
+    
+}
+
 #[derive(Clone, Debug, PartialEq)]
 pub enum Environment {
     Int,
     Ext,
-    Combo(Vec<Environment>),
+    Combo(Option<Vec<Environment>>),
+}
+impl Environment {
+    pub fn from_str(string: &String, current_env_strs: &EnvironmentStrings) -> Option<Self> {
+        if current_env_strs.int.contains(&string) {
+            return Some(Environment::Int);
+        }
+        if current_env_strs.ext.contains(&string)  {
+            return Some(Environment::Ext);
+        }
+        if current_env_strs.combo.contains(&string) { // TODO: actually hanndle combos (4 total possibilities, int/int, int/ext, ext/int, and ext/ext)
+            return Some(Environment::Combo(None))
+        }
+        None
+    }
 }
 
-
-#[derive(Default, PartialEq, Clone, Debug)]
+//TODO: add get_scene_from_id func to ScreenplayDocument struct
+#[derive(PartialEq, Clone, Debug)]
 pub struct Scene {
     pub start: ScreenplayCoordinate,
 
+    pub environment: Environment,
     pub number: Option<SceneNumber>,
     pub revised: bool,
 
