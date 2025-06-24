@@ -1,7 +1,7 @@
 use std::{collections::HashMap, default, hash::Hash, ops::{Deref, DerefMut}, time::SystemTime};
 use serde::de::IntoDeserializer;
 use uuid::{Uuid};
-use crate::pdf_document;
+use crate::{pdf_document, screenplay_document};
 
 
 #[derive(PartialEq, Clone, Debug)]
@@ -260,8 +260,21 @@ pub struct Character {
 }
 
 // -------------------- PAGE
-#[derive(Default, PartialEq, Clone, Debug)]
+#[derive(Default, PartialEq, Clone, Debug, Eq, Hash)]
 pub struct PageNumID(pub Uuid);
+impl Deref for PageNumID {
+    type Target = Uuid;
+    fn deref(&self) -> &Self::Target {
+        &self.0
+    }
+
+}
+
+impl DerefMut for PageNumID {
+    fn deref_mut(&mut self) -> &mut Self::Target {
+        &mut self.0
+    }
+} 
 
 
 #[derive(Default, PartialEq, Clone, Debug)]
@@ -320,16 +333,6 @@ pub struct Scene {
     pub story_location: Location,
     pub story_sublocation: Option<Location>,
     pub story_time_of_day: Option<TimeOfDay>, // DAY, NIGHT, etc.
-}
-impl Scene {
-    pub fn get_scenes_with_element(element: &TextElement) -> Option<Vec<Scene>> {
-        None
-    }
-
-    pub fn get_scenes_with_character_speaking(character: &Character,) -> Option<Vec<Scene>>{
-        None
-
-    }
 }
 
 pub struct EnvironmentStrings {
@@ -403,46 +406,6 @@ pub struct Location {
 }
 
 
-// --------------- DOCUMENT METAMAPS
-
-#[derive(Default, PartialEq, Clone, Debug)]
-pub struct SceneMap(HashMap<SceneID, Scene>);
-
-impl Deref for SceneMap {
-    type Target = HashMap<SceneID, Scene>;
-    fn deref(&self) -> &Self::Target {
-        &self.0
-    }
-}
-
-impl DerefMut for SceneMap {
-    fn deref_mut(&mut self) -> &mut Self::Target {
-        &mut self.0
-    }
-}
-
-
-#[derive(Default, PartialEq, Clone, Debug)]
-pub struct CharacterMap(HashMap<CharacterID, Character>);
-
-impl Deref for CharacterMap  {
-    type Target = HashMap<CharacterID, Character>;
-    fn deref(&self) -> &Self::Target {
-        &self.0
-    }
-}
-
-impl DerefMut for CharacterMap {
-    fn deref_mut(&mut self) -> &mut Self::Target {
-        &mut self.0
-    }
-}
-
-
-#[derive(Default, PartialEq, Clone, Debug)]
-pub struct LocationMap(HashMap<LocationID, Location>);
-
-
 // --------------- BASIC DOCUMENT COMPONENTS ---------------  
 
 
@@ -458,7 +421,7 @@ pub struct TextElement {
 pub struct Line {
     pub text_elements: Vec<TextElement>,
     pub scene_number: Option<String>,
-    pub line_type: Option<SPType>, // should default to NONE when initialized!!!
+    pub line_type: Option<SPType>,
     pub preceding_empty_lines: u64,
     pub revised: bool,
     pub blank: bool,
@@ -488,7 +451,70 @@ pub struct Page {
 pub struct ScreenplayDocument {
     pub pages: Vec<Page>,
     pub revisions: Option<Vec<String>>, // current (and possible previous) revision date(s) from the title page
-    pub scenes: SceneMap,
-    pub locations: HashMap<Uuid, Location>,
-    pub characters: CharacterMap
+    pub scenes: HashMap<SceneID, Scene>,
+    pub locations: HashMap<LocationID, Location>,
+    pub characters: HashMap<CharacterID, Character>
+}
+impl ScreenplayDocument {
+    pub fn get_lines_for_character(&self, character: &CharacterID) -> Option<Vec<&ScreenplayCoordinate>> {
+        None
+    }
+
+    // Get CHARACTERS...
+    pub fn get_characters_for_scene(&self, scene_id: &SceneID) -> Option<Vec<&CharacterID>> {
+        None
+    }
+    
+    pub fn get_characters_for_page(&self, page_num_id: &PageNumID) -> Option<Vec<&Character>> {
+        None
+    }
+
+    pub fn get_characters_for_scene_heading_element(&self, scene_heading_element: &SceneHeadingElement) -> Option<Vec<&Character>> {
+        None
+    }
+    
+    // Get SCENES...
+    pub fn get_scenes_from_ids(&self, ids: &Vec<&SceneID>) -> Option<Vec<&SceneID>> {
+        None
+    }
+
+    pub fn get_scenes_with_element(&self, element: &TextElement) -> Option<Vec<&SceneID>> {
+        None
+    }
+
+    pub fn get_scenes_with_character_speaking(&self, character: &Character,) -> Option<Vec<&SceneID>>{
+        None
+    }
+
+    pub fn get_scenes_with_scene_heading_element(&self, s: &screenplay_document::SceneHeadingElement) -> Option<Vec<&SceneID>> {
+        None
+    }
+    pub fn get_scenes_on_page_by_nominal_number(&self, number: &PageNumber) -> Option<Vec<&SceneID>> {
+        None
+    }
+    pub fn get_scenes_on_page_by_id(&self, id: &PageNumID) -> Option<Vec<&SceneID>> {
+        None
+    }
+    pub fn get_scene_for_screenplay_coordinate(&self, screenplay_coordinate: &ScreenplayCoordinate) -> Option<Vec<&SceneID>> {
+        None
+    }
+
+    // Get PAGEs...
+    pub fn get_pages_for_scene(&self, scene_id: &SceneID) -> Option<Vec<&PageNumID>> {
+        None
+    }
+
+    pub fn get_pages_for_character(&self, character_id: &CharacterID) -> Option<Vec<&PageNumID>> {
+        None
+    }
+
+    pub fn get_pages_for_scene_heading_element(&self, scene_heading_element: &SceneHeadingElement) -> Option<Vec<&PageNumID>> {
+        None
+    }
+
+    pub fn get_page_from_screenplay_coordinate(&self, screenplay_coordinate: &ScreenplayCoordinate) -> Option<&PageNumID> {
+        None
+    }
+
+    
 }
