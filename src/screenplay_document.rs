@@ -1,7 +1,8 @@
-use std::{collections::HashMap, default, hash::Hash, time::SystemTime};
+use std::{collections::HashMap, default, hash::Hash, ops::{Deref, DerefMut}, time::SystemTime};
 use serde::de::IntoDeserializer;
 use uuid::{Uuid};
 use crate::pdf_document;
+
 
 #[derive(PartialEq, Clone, Debug)]
 pub enum TimeOfDay {
@@ -136,6 +137,8 @@ pub enum PageFormat {
 // LINE TYPE variants take in specialized SUBTYPE enum variants
 // I.E. each SCENE_HEADING TextElement will take in a SluglineElement as data
 // each 
+
+
 /// # SPType
 /// 
 /// The various Element Types found in a Screenplay.
@@ -168,7 +171,7 @@ pub enum PageFormat {
 /// 
 /// Scene headings can contain more element types, such as a Time Period, or multiple Sublocations.
 #[derive(Default, Clone, Debug,
-    Copy, PartialEq, )]
+    Copy, PartialEq, Eq, Hash)]
 #[repr(u8)]
 #[allow(non_camel_case_types)]
 pub enum SPType {
@@ -242,59 +245,52 @@ pub enum SPType {
     _TYPECOUNT
 }
 
-pub struct SceneID(pub Uuid);
+
+
+// -------- SCREENPLAY TYPED STRUCTS / ENUMS
+
+// -------------------- CHARACTER
+#[derive(Default, PartialEq, Clone, Debug, Eq, Hash)]
+pub struct CharacterID(Uuid);
+
+#[derive(Default, PartialEq, Clone, Debug, Eq, Hash)]
+pub struct Character {
+    name: String,
+    id: CharacterID
+}
+
+// -------------------- PAGE
+#[derive(Default, PartialEq, Clone, Debug)]
 pub struct PageNumID(pub Uuid);
 
 
 #[derive(Default, PartialEq, Clone, Debug)]
-pub struct TextElement {
-    pub text: String,
-    pub element_type: Option<SPType>,
-    pub preceding_whitespace_chars: u64,
-    pub element_position: Option<pdf_document::TextPosition>,
-}
+pub struct PageNumber(pub String);
 
-#[derive(Default, PartialEq, Clone, Debug)]
-pub struct Line {
-    pub text_elements: Vec<TextElement>,
-    pub scene_number: Option<String>,
-    pub line_type: Option<SPType>, // should default to NONE when initialized!!!
-    pub preceding_empty_lines: u64,
-    pub revised: bool,
-    pub blank: bool,
-}
-
-
-#[derive(Default, PartialEq, Clone, Debug)]
-pub struct Page {
-    pub lines: Vec<Line>,
-    pub page_number: Option<PageNumber>,
-    pub revised: bool,
-    pub revision_label: Option<String>,
-    pub revision_date: Option<String>,
-    pub page_format: Option<PageFormat>,
-}
-
-#[derive(Default, PartialEq, Clone, Debug)]
-    pub struct ScreenplayCoordinate {
-        pub page: u64,
-        pub line: u64,
-        pub element: Option<u64>
-    }
-
+// -------------------- SCENE 
 #[derive(Default, PartialEq, Clone, Debug)]
 pub struct SceneNumber(pub String);
 
-
-#[derive(Default, PartialEq, Clone, Debug)]
-pub struct PageNumber(pub String);
+#[derive(Default, PartialEq, Clone, Debug, Hash, Eq)]
+pub struct SceneID(pub Uuid);
+impl Deref for SceneID {
+    type Target = Uuid;
+    fn deref(&self) -> &Self::Target {
+        &self.0
+    }
+}
+impl DerefMut for SceneID {
+    fn deref_mut(&mut self) -> &mut Self::Target {
+        &mut self.0
+    }
+}
 
 //TODO:
 // make the SP_SCENE_HEADING element take one of THESE as data,
 // instead of having the scene elements flattened out among the SP_TYPEs
 // maybe also do this technique with CHARACTER, DIALOGUE, etc. , 
 // basically make each element have the LINE TYPE, which contains the ELEMENT TYPE as data...
-#[derive(Clone, Debug, Copy, PartialEq)]
+#[derive(Clone, Debug, Copy, PartialEq, Eq, Hash)]
 pub enum SceneHeadingElement {
     Line, // The Line Itself
     Environment,
@@ -309,6 +305,31 @@ pub enum SceneHeadingElement {
 
 
 
+}
+
+
+//TODO: add get_scene_from_id func to ScreenplayDocument struct
+#[derive(PartialEq, Clone, Debug)]
+pub struct Scene {
+    pub start: ScreenplayCoordinate,
+
+    pub environment: Environment,
+    pub number: Option<SceneNumber>,
+    pub revised: bool,
+
+    pub story_location: Location,
+    pub story_sublocation: Option<Location>,
+    pub story_time_of_day: Option<TimeOfDay>, // DAY, NIGHT, etc.
+}
+impl Scene {
+    pub fn get_scenes_with_element(element: &TextElement) -> Option<Vec<Scene>> {
+        None
+    }
+
+    pub fn get_scenes_with_character_speaking(character: &Character,) -> Option<Vec<Scene>>{
+        None
+
+    }
 }
 
 pub struct EnvironmentStrings {
@@ -357,32 +378,117 @@ impl Environment {
     }
 }
 
-//TODO: add get_scene_from_id func to ScreenplayDocument struct
-#[derive(PartialEq, Clone, Debug)]
-pub struct Scene {
-    pub start: ScreenplayCoordinate,
+#[derive(Default, PartialEq, Clone, Debug, Eq, Hash)]
+pub struct LocationID(Uuid);
 
-    pub environment: Environment,
-    pub number: Option<SceneNumber>,
-    pub revised: bool,
-
-    pub story_location: Location,
-    pub story_sublocation: Option<Location>,
-    pub story_time_of_day: Option<TimeOfDay>, // DAY, NIGHT, etc.
+impl Deref for LocationID {
+    type Target = Uuid;
+    fn deref(&self) -> &Self::Target {
+        &self.0
+    }
 }
 
-#[derive(Default, PartialEq, Clone, Debug)]
+impl DerefMut for LocationID {
+    fn deref_mut(&mut self) -> &mut Self::Target {
+        &mut self.0
+    }
+}
+
+#[derive(Default, PartialEq, Clone, Debug, Eq, Hash)]
 pub struct Location {
-    pub elements: Vec<TextElement>,
+    pub strings: Vec<String>,
     pub sublocations: Option<Vec<Uuid>>, // list of IDs for other locations
     pub superlocation: Option<Uuid> // 
 
 }
 
+
+// --------------- DOCUMENT METAMAPS
+
+#[derive(Default, PartialEq, Clone, Debug)]
+pub struct SceneMap(HashMap<SceneID, Scene>);
+
+impl Deref for SceneMap {
+    type Target = HashMap<SceneID, Scene>;
+    fn deref(&self) -> &Self::Target {
+        &self.0
+    }
+}
+
+impl DerefMut for SceneMap {
+    fn deref_mut(&mut self) -> &mut Self::Target {
+        &mut self.0
+    }
+}
+
+
+#[derive(Default, PartialEq, Clone, Debug)]
+pub struct CharacterMap(HashMap<CharacterID, Character>);
+
+impl Deref for CharacterMap  {
+    type Target = HashMap<CharacterID, Character>;
+    fn deref(&self) -> &Self::Target {
+        &self.0
+    }
+}
+
+impl DerefMut for CharacterMap {
+    fn deref_mut(&mut self) -> &mut Self::Target {
+        &mut self.0
+    }
+}
+
+
+#[derive(Default, PartialEq, Clone, Debug)]
+pub struct LocationMap(HashMap<LocationID, Location>);
+
+
+// --------------- BASIC DOCUMENT COMPONENTS ---------------  
+
+
+#[derive(Default, PartialEq, Clone, Debug)]
+pub struct TextElement {
+    pub text: String,
+    pub element_type: Option<SPType>,
+    pub preceding_whitespace_chars: u64,
+    pub element_position: Option<pdf_document::TextPosition>,
+}
+
+#[derive(Default, PartialEq, Clone, Debug)]
+pub struct Line {
+    pub text_elements: Vec<TextElement>,
+    pub scene_number: Option<String>,
+    pub line_type: Option<SPType>, // should default to NONE when initialized!!!
+    pub preceding_empty_lines: u64,
+    pub revised: bool,
+    pub blank: bool,
+}
+
+
+#[derive(Default, PartialEq, Clone, Debug)]
+pub struct Page {
+    pub lines: Vec<Line>,
+    pub page_number: Option<PageNumber>,
+    pub revised: bool,
+    pub revision_label: Option<String>,
+    pub revision_date: Option<String>,
+    pub page_format: Option<PageFormat>,
+}
+
+#[derive(Default, PartialEq, Clone, Debug)]
+    pub struct ScreenplayCoordinate {
+        pub page: u64,
+        pub line: u64,
+        pub element: Option<u64>
+    }
+
+
+
 #[derive(Default, PartialEq, Clone, Debug)]
 pub struct ScreenplayDocument {
     pub pages: Vec<Page>,
     pub revisions: Option<Vec<String>>, // current (and possible previous) revision date(s) from the title page
-    pub scenes: HashMap<Uuid, Scene>,
-    pub locations: HashMap<Uuid, Location>
+    pub scenes: SceneMap,
+    pub locations: HashMap<Uuid, Location>,
+    pub characters: CharacterMap
 }

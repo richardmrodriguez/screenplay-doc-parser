@@ -18,6 +18,7 @@ use crate::screenplay_document::SPType;
 use crate::screenplay_document;
 use crate::screenplay_document::Scene;
 use crate::screenplay_document::SceneHeadingElement;
+use crate::screenplay_document::SceneID;
 use crate::screenplay_document::SceneNumber;
 use crate::screenplay_document::ScreenplayCoordinate;
 use crate::screenplay_document::TextElement;
@@ -487,15 +488,16 @@ environtment_strs: EnvironmentStrings) -> Option<screenplay_document::Screenplay
                             },
                             revised: new_line.revised,
                             story_location: screenplay_document::Location { 
-                                elements: {
+                                strings: {
                                     
                                     new_line.text_elements
                                     .iter()
                                     .filter(
                                         |el| el.element_type == Some(SPType::SP_SCENE_HEADING(SceneHeadingElement::Location))
                                     )
-                                    .map(|el| el.clone())
+                                    .map(|el| el.text.clone())
                                     .collect()
+                                    
                                 }, 
                                 sublocations: None, // TODO: ????????
                                 superlocation: None //TODO: ???????? what the fuck are these supposed to do...
@@ -516,7 +518,7 @@ environtment_strs: EnvironmentStrings) -> Option<screenplay_document::Screenplay
                             
                             
                         };
-                        new_screenplay_doc.scenes.insert(Uuid::new_v4(), new_scene);
+                        new_screenplay_doc.scenes.insert(SceneID(Uuid::new_v4()), new_scene);
                     },
                     _ => {}
                 }
