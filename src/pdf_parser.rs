@@ -405,7 +405,7 @@ environtment_strs: EnvironmentStrings) -> Option<screenplay_document::Screenplay
                     if let Some(last_word)= pdf_line.words.last() {
                         let char_width: f64 = 7.2;
                         let whitespace_chars: u64 = u64::from(
-                            ((pdf_word.position.x - (last_word.position.x + last_word.text_bbox_width))
+                            ((pdf_word.position.x - (last_word.position.x + last_word.bbox_width))
                             / char_width)
                             .round() as u64
                         );

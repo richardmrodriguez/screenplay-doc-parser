@@ -456,11 +456,12 @@ pub struct ScreenplayDocument {
     pub characters: HashMap<CharacterID, Character>
 }
 impl ScreenplayDocument {
-    pub fn get_lines_for_character(&self, character: &CharacterID) -> Option<Vec<&ScreenplayCoordinate>> {
+    // ------------ Get LINE...
+    pub fn get_lines_for_character_speaking(&self, character: &CharacterID) -> Option<Vec<&ScreenplayCoordinate>> {
         None
     }
 
-    // Get CHARACTERS...
+    // ------------ Get CHARACTERS...
     pub fn get_characters_for_scene(&self, scene_id: &SceneID) -> Option<Vec<&CharacterID>> {
         None
     }
@@ -473,7 +474,7 @@ impl ScreenplayDocument {
         None
     }
     
-    // Get SCENES...
+    // ------------ Get SCENES...
     pub fn get_scenes_from_ids(&self, ids: &Vec<&SceneID>) -> Option<Vec<&SceneID>> {
         None
     }
@@ -495,11 +496,11 @@ impl ScreenplayDocument {
     pub fn get_scenes_on_page_by_id(&self, id: &PageNumID) -> Option<Vec<&SceneID>> {
         None
     }
-    pub fn get_scene_for_screenplay_coordinate(&self, screenplay_coordinate: &ScreenplayCoordinate) -> Option<Vec<&SceneID>> {
+    pub fn get_scene_for_screenplay_coordinate(&self, screenplay_coordinate: &ScreenplayCoordinate) -> Option<&SceneID> {
         None
     }
 
-    // Get PAGEs...
+    // ------------ Get PAGEs...
     pub fn get_pages_for_scene(&self, scene_id: &SceneID) -> Option<Vec<&PageNumID>> {
         None
     }

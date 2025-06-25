@@ -124,7 +124,8 @@ pub struct PageSize {
 #[derive(Default)]
 pub struct Word {
     pub text: String,
-    pub text_bbox_width: f64,
+    pub bbox_width: f64,
+    pub bbox_height: f64,
     pub position:TextPosition,
     pub font_name: Option<String>,
     pub font_size: f64,

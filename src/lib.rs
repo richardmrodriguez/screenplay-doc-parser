@@ -43,7 +43,8 @@ mod tests {
         
         let new_word: pdf_document::Word = pdf_document::Word {
             text: text.clone(), 
-            text_bbox_width: text.len() as f64 * 7.2 as f64, 
+            bbox_width: text.len() as f64 * 7.2 as f64,
+            bbox_height: 0.0,
             position: TextPosition {
                 x: element_indentation,
                 y: y_height_pts
