@@ -673,7 +673,7 @@ dependencies = [
 
 [[package]]
 name = "screenplay-doc-parser-rs"
-version = "0.1.5"
+version = "0.1.6"
 dependencies = [
  "dateparser",
  "mupdf-basic-text-extractor",
