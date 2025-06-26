@@ -5,7 +5,6 @@ edition = "2024"
 repository = "https://github.com/richardmrodriguez/screenplay-doc-parser"
 license = "AGPL-3.0-only"
 description = "Tools to parse Screenplay-formatted documents into semantically-typed structs."
-publish = false
 
 [dependencies]
 dateparser = "0.2.1"
