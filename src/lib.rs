@@ -5,12 +5,12 @@ pub mod pdf_document;
 
 pub mod pdf_parser;
 
+#[cfg(feature="mupdf-basic-parsing")]
+pub mod mupdf_basic_parser;
 
 
 #[cfg(test)]
 mod tests {
-
-    use std::default;
 
     use crate::{pdf_document::{ElementIndentationsPoints, PDFDocument, TextPosition}, screenplay_document::{EnvironmentStrings, SPType, TimeOfDayCollection}};
 
@@ -56,41 +56,23 @@ mod tests {
         new_word
     }
 
-    //#[test]
-    fn it_works() {
-        let mut mock_pdf:pdf_document::PDFDocument = PDFDocument::default();
-        let mut new_page = pdf_document::Page::default();
-        
-        let action_word  = _create_pdfword(
-            "Action!".to_string(), 72.0*1.5, None);
-        let mut new_line: pdf_document::Line = pdf_document::Line::default();
-        new_line.words.push(action_word);
-        new_page.lines.push(new_line);
-        mock_pdf.pages.push(new_page);
-        //println!("Adding!...");
-        let parse_result_doc = pdf_parser::get_screenplay_doc_from_pdf_obj(mock_pdf, 
-        None,
-        None,
-        screenplay_document::TimeOfDayCollection::default(),
-        EnvironmentStrings::default()
-        );
-        if let Some(document) = parse_result_doc {
-            if let Some(first_page) = document.pages.first() {
-                println!("First page exists!");
-                if let Some(first_line) = first_page.lines.first() {
-                    println!("First line exists!");
-                    if let Some (first_word) = first_line.text_elements.first() {
-                        println!("First Word exists!");
-                    }
-                } 
+    #[cfg(feature="mupdf-basic-parsing")]
+    #[test]
+    fn test_mupdf_parsing() {
+        use mupdf_basic_parser;
+        let screenplay = mupdf_basic_parser::get_screenplay_doc_from_filepath(
+            "test_pdfs/DraftTest_02.pdf".into()
+        ).unwrap();
+        for page in screenplay.pages {
+            println!("PAGE");
+            for line in page.lines {
+                println!("-----LINE");
+                for elm in line.text_elements {
+                    print!("{} | ", elm.text);
+                }
+                println!("");
             }
-
-            let word_text = document.pages.first().unwrap()
-            .lines.first().unwrap()
-            .text_elements.first().unwrap().text.clone();
-            println!("Text: {}", word_text);
         }
-
     }
 
     #[test]
@@ -209,8 +191,8 @@ mod tests {
             mock_pdf, 
             None,
             None,
-            screenplay_document::TimeOfDayCollection::default(),
-            EnvironmentStrings::default()
+            None,
+            None
         ).unwrap();
 
         println!(
@@ -355,8 +337,8 @@ mod tests {
             mock_pdf,
             None, 
         None,
-        TimeOfDayCollection::default(),
-        EnvironmentStrings::default()
+        None,
+        None
         );
 
         println!("{:#?}", parsed_doc);

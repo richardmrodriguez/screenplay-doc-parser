@@ -240,13 +240,28 @@ fn _get_type_for_word(pdf_word: &pdf_document::Word,
 pub fn get_screenplay_doc_from_pdf_obj(doc: pdf_document::PDFDocument, 
 element_indentations: Option<ElementIndentationsInches>,
 revision_marker: Option<String>,
-time_of_day_strs: screenplay_document::TimeOfDayCollection,
-environtment_strs: EnvironmentStrings) -> Option<screenplay_document::ScreenplayDocument> {
+time_of_day_strs_opt: Option<screenplay_document::TimeOfDayCollection>,
+environtment_strs_opt: Option<EnvironmentStrings>) -> Option<screenplay_document::ScreenplayDocument> {
 
     use screenplay_document::ScreenplayDocument;
 
     if doc.pages.len() < 1 {
         return None;
+    }
+
+    let mut time_of_day_strs: screenplay_document::TimeOfDayCollection;
+    if let Some(tds) = time_of_day_strs_opt {
+        time_of_day_strs = tds;
+    } else {
+        time_of_day_strs = screenplay_document::TimeOfDayCollection::default();
+    } 
+
+    let mut environment_strs: screenplay_document::EnvironmentStrings;
+    if let Some(evs) = environtment_strs_opt {
+        environment_strs = evs;
+    }
+    else {
+        environment_strs = EnvironmentStrings::default();
     }
 
     let mut r_marker = "*".to_string();
@@ -298,7 +313,7 @@ environtment_strs: EnvironmentStrings) -> Option<screenplay_document::Screenplay
                 &new_line,
                 &element_indentaions_pts,
                 &time_of_day_strs,
-                &environtment_strs);
+                &environment_strs);
 
                 println!("New type! {:?}", new_word_type);
                 new_text_element.element_position = Some(pdf_word.position.clone());
@@ -479,7 +494,7 @@ environtment_strs: EnvironmentStrings) -> Option<screenplay_document::Screenplay
                                     .find(|te| te.element_type == Some(SPType::SP_SCENE_HEADING(SceneHeadingElement::Environment)))
                                     .unwrap()
                                     .text,
-                                &environtment_strs
+                                &environment_strs
                             ).unwrap(),
                             start: ScreenplayCoordinate {
                                 page: new_screenplay_doc.pages.len() as u64 + {if new_screenplay_doc.pages.len() > 0 {1} else {0}},
