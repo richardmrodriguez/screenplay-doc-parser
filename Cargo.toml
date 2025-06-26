@@ -11,7 +11,7 @@ dateparser = "0.2.1"
 serde = { version = "1.0.219", features = ["derive"] }
 unicode-segmentation = "1.12.0"
 uuid = { version = "1.17.0", features = ["v4"] }
-mupdf-basic-text-extractor = {version = "0.2.0", optional = true}
+mupdf-basic-text-extractor = {version = "0.3.0", optional = true}
 
 [features]
 mupdf-basic-parsing = ["dep:mupdf-basic-text-extractor"]

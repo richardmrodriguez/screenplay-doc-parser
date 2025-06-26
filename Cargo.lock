@@ -470,9 +470,9 @@ dependencies = [
 
 [[package]]
 name = "mupdf-basic-text-extractor"
-version = "0.2.0"
+version = "0.3.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "f846aeebb6815793d2d186a009d9cbcefb4fdb693d997747a555e6bfe4cf5618"
+checksum = "d3d18af475af982e83db6c3de7678f2e6996d491963367eca4abcb452633f747"
 dependencies = [
  "mupdf",
 ]

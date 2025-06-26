@@ -61,16 +61,16 @@ mod tests {
     fn test_mupdf_parsing() {
         use mupdf_basic_parser;
         let screenplay = mupdf_basic_parser::get_screenplay_doc_from_filepath(
-            "test_pdfs/DraftTest_02.pdf".into()
+            "test_data/DraftTest_02.pdf".into()
         ).unwrap();
         for page in screenplay.pages {
             println!("PAGE");
             for line in page.lines {
                 println!("-----LINE");
                 for elm in line.text_elements {
-                    print!("{} | ", elm.text);
+                    print!("'{}' X: {:?}", elm.text, elm.element_position.unwrap().x);
                 }
-                println!("");
+                println!("\n");
             }
         }
     }
