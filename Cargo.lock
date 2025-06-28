@@ -377,9 +377,9 @@ dependencies = [
 
 [[package]]
 name = "indexmap"
-version = "2.9.0"
+version = "2.10.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "cea70ddb795996207ad57735b50c5982d8844f38ba9ee5f1aedcfb708a2aa11e"
+checksum = "fe4cd85333e22411419a0bcae1297d25e58c9443848b11dc6a86fefe8c78a661"
 dependencies = [
  "equivalent",
  "hashbrown",
@@ -470,9 +470,9 @@ dependencies = [
 
 [[package]]
 name = "mupdf-basic-text-extractor"
-version = "0.3.0"
+version = "0.3.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "d3d18af475af982e83db6c3de7678f2e6996d491963367eca4abcb452633f747"
+checksum = "ac0e20bc6cc164faa59062d764fe1825d60c1c32381bf6ca7869eed974f611e5"
 dependencies = [
  "mupdf",
 ]

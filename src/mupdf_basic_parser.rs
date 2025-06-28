@@ -1,12 +1,22 @@
 use std::fmt::Error;
 
 use crate::pdf_document;
+use crate::pdf_document::ElementIndentationsInches;
+use crate::pdf_document::ElementIndentationsPoints;
 use crate::pdf_document::TextPosition;
 use crate::pdf_parser;
 use crate::screenplay_document;
+use crate::screenplay_document::EnvironmentStrings;
+use crate::screenplay_document::TimeOfDayCollection;
 use mupdf_basic_text_extractor;
 
-pub fn get_screenplay_doc_from_filepath(path: String) -> Result<screenplay_document::ScreenplayDocument, Box<dyn std::error::Error>>{
+pub fn get_screenplay_doc_from_filepath(
+    path: String,
+    element_indentations: Option<ElementIndentationsInches>,
+    revision_marker_opt: Option<String>,
+    time_of_day_strs_opt: Option<TimeOfDayCollection>,
+    env_strs_opt: Option<EnvironmentStrings>,
+) -> Result<screenplay_document::ScreenplayDocument, Box<dyn std::error::Error>>{
     use mupdf_basic_text_extractor:: {Doc, Fragment, Line, Page};
     let doc_result: Result<Doc, Box<dyn std::error::Error>> = mupdf_basic_text_extractor::get_structured_document_from_filepath(path);
 
@@ -47,10 +57,10 @@ pub fn get_screenplay_doc_from_filepath(path: String) -> Result<screenplay_docum
         
             if let Some(parsed_screenplay) = pdf_parser::get_screenplay_doc_from_pdf_obj(
                 new_doc, 
-                None, 
-                None, 
-                None, 
-                None
+                element_indentations, 
+                revision_marker_opt, 
+                time_of_day_strs_opt, 
+                env_strs_opt
             ) {
                 return Ok(parsed_screenplay);
             }

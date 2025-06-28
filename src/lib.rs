@@ -60,15 +60,56 @@ mod tests {
     #[test]
     fn test_mupdf_parsing() {
         use mupdf_basic_parser;
-        let screenplay = mupdf_basic_parser::get_screenplay_doc_from_filepath(
-            "test_data/DraftTest_02.pdf".into()
-        ).unwrap();
+
+        let custom_indentations = ElementIndentationsInches::us_letter_default()
+        //.character(3.5)
+        .right(7.6)
+        ;
+        use crate::{pdf_document::ElementIndentationsInches, screenplay_document::ScreenplayDocument};
+        let screenplay_result = mupdf_basic_parser::get_screenplay_doc_from_filepath(
+            "test_data/DraftTest_02.pdf".into(),
+            Some(custom_indentations),
+            None,
+            None,
+            None
+        );
+        let screenplay: ScreenplayDocument;
+        if screenplay_result.is_err() {
+            println!("{:#?}",screenplay_result);
+            panic!();
+        }
+        else {
+            screenplay = screenplay_result.unwrap()
+        }
+        
         for page in screenplay.pages {
             println!("PAGE");
             for line in page.lines {
-                println!("-----LINE");
+
+                println!(
+                    "-----LINE | Y: {:?} | TYPE: {:?} | REVISED: {}",
+                    {
+                        if let Some(te) = line.text_elements.first() {
+                            if let Some(ep) = te.element_position {
+                                Some(ep.y)
+                            } else { 
+                                None
+                            }
+                        }
+                        else {
+                            None
+                        }
+                    },
+                    line.line_type,
+                    line.revised
+
+                );
                 for elm in line.text_elements {
-                    print!("'{}' X: {:?}", elm.text, elm.element_position.unwrap().x);
+                    println!("{:38} | X: {:7.2?} '{}' ", 
+                        format!("{:?}",elm.element_type),
+                        elm.element_position.unwrap().x,
+                        elm.text,
+                    );
                 }
                 println!("\n");
             }

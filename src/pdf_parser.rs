@@ -27,9 +27,10 @@ fn _get_type_for_word(pdf_word: &pdf_document::Word,
     new_line: &screenplay_document::Line,
     element_indentaions_pts: &ElementIndentationsPoints,
     time_of_day_strs: &screenplay_document::TimeOfDayCollection,
-    environment_strs: &screenplay_document::EnvironmentStrings
+    environment_strs: &screenplay_document::EnvironmentStrings,
+    r_marker: &String
 ) -> Option<SPType>{
-    
+
     use screenplay_document::SceneHeadingElement;
     use screenplay_document::SPType::*;
 
@@ -55,6 +56,9 @@ fn _get_type_for_word(pdf_word: &pdf_document::Word,
             match t {
                 SPType::SP_SCENE_HEADING(_) => {
                     if pdf_word.position.x >= element_indentaions_pts.right {
+                        if pdf_word.text == *r_marker {
+                            return Some(SPType::SP_LINE_REVISION_MARKER);
+                        }
                         return Some(SPType::SP_SCENENUM);
                     }
                 },
@@ -68,7 +72,9 @@ fn _get_type_for_word(pdf_word: &pdf_document::Word,
     
     // check current line type ...
     if (new_line.line_type == Some(SPType::SP_SCENE_HEADING(SceneHeadingElement::Line))) && (pdf_word.position.x >= element_indentaions_pts.right) {
-        
+        if pdf_word.text == *r_marker {
+            return Some(SPType::SP_LINE_REVISION_MARKER);
+        }
         return Some(SPType::SP_SCENENUM);
     }
 
@@ -76,6 +82,17 @@ fn _get_type_for_word(pdf_word: &pdf_document::Word,
 
     // first pass of Word Type -- check previous element types first
     match previous_element_type {
+        //FIXME: SHORT-SIGHTED; Does not account for dual dialogue...
+        SP_DIALOGUE => {
+            return Some(SP_DIALOGUE);
+        }
+        /* 
+        SP_ACTION => {    
+            //FIXME: WRONG
+            //return Some(SPType::SP_ACTION)
+        }
+        */
+        
         SP_SCENE_HEADING(SceneHeadingElement::TimeOfDay) => {
             if pdf_word.text == "-".to_string() {
                 return Some(SPType::SP_SCENE_HEADING(SceneHeadingElement::Separator));
@@ -173,6 +190,9 @@ fn _get_type_for_word(pdf_word: &pdf_document::Word,
                 if pdf_word.position.x < element_indentaions_pts.left {
                     return Some(SPType::SP_SCENENUM);
                 } else if pdf_word.position.x >= element_indentaions_pts.right {
+                    if pdf_word.text == *r_marker {
+                        return Some(SPType::SP_LINE_REVISION_MARKER);
+                    }
                     return Some(SPType::SP_SCENENUM);
                 } else {
                     
@@ -206,13 +226,23 @@ fn _get_type_for_word(pdf_word: &pdf_document::Word,
                     else if _within_tolerance(element_indentaions_pts.parenthetical) {
                         return Some(SPType::SP_PARENTHETICAL);
                     }
-                    else {return None;}
+                    else {
+                        /* 
+                        if pdf_word.text == "BETTY".to_string(){
+                            println!("{:#?}", pdf_word);
+                            println!("{:#?}", element_indentaions_pts.character);
+                            panic!();
+                            
+                        }
+                        */
+                        return None;
+                    }
                 };
                 
             }
             
             // Text is either ABOVE the top margin or BELOW the bottom margins...
-            if pdf_word.text == "17A.".to_string() {println!("PAGENUMBER FOUND!----------------");}
+            // pdf_word.text == "17A.".to_string() {println!("PAGENUMBER FOUND!----------------");}
             if pdf_word.position.y >= element_indentaions_pts.top {
                 let wordwidth: f64 = char_width * f64::from(pdf_word.text.len() as i32);
                 let rightedge: f64 = wordwidth + pdf_word.position.x;
@@ -226,11 +256,12 @@ fn _get_type_for_word(pdf_word: &pdf_document::Word,
                     return Some(SPType::NON_CONTENT_TOP);
                 }
             }
-
+            // TODO: let user pass in MORE and CONTINUED strings as a struct
             if pdf_word.text.contains("(MORE)") | pdf_word.text.contains("(CONTINUED)") | pdf_word.text.contains("(CONT'D)") {
                 return Some(SPType::SP_MORE_CONTINUED);
+            } else {
+                return Some(SPType::NON_CONTENT_BOTTOM);
             }
-            else {return Some(SPType::NON_CONTENT_BOTTOM);}
         },
     
     
@@ -238,10 +269,10 @@ fn _get_type_for_word(pdf_word: &pdf_document::Word,
 }
 
 pub fn get_screenplay_doc_from_pdf_obj(doc: pdf_document::PDFDocument, 
-element_indentations: Option<ElementIndentationsInches>,
-revision_marker: Option<String>,
+element_indent_in_opt: Option<ElementIndentationsInches>,
+rev_marker_opt: Option<String>,
 time_of_day_strs_opt: Option<screenplay_document::TimeOfDayCollection>,
-environtment_strs_opt: Option<EnvironmentStrings>) -> Option<screenplay_document::ScreenplayDocument> {
+env_strs_opt: Option<EnvironmentStrings>) -> Option<screenplay_document::ScreenplayDocument> {
 
     use screenplay_document::ScreenplayDocument;
 
@@ -249,24 +280,27 @@ environtment_strs_opt: Option<EnvironmentStrings>) -> Option<screenplay_document
         return None;
     }
 
-    let mut time_of_day_strs: screenplay_document::TimeOfDayCollection;
+    let time_of_day_strs: screenplay_document::TimeOfDayCollection;
     if let Some(tds) = time_of_day_strs_opt {
         time_of_day_strs = tds;
     } else {
         time_of_day_strs = screenplay_document::TimeOfDayCollection::default();
     } 
 
-    let mut environment_strs: screenplay_document::EnvironmentStrings;
-    if let Some(evs) = environtment_strs_opt {
+    let environment_strs: screenplay_document::EnvironmentStrings;
+    if let Some(evs) = env_strs_opt {
         environment_strs = evs;
     }
     else {
         environment_strs = EnvironmentStrings::default();
     }
 
-    let mut r_marker = "*".to_string();
-    if let Some(rm) = revision_marker{
+    let r_marker; 
+    if let Some(rm) = rev_marker_opt{
         r_marker = rm;
+    }
+    else {
+        r_marker = "*".to_string();
     }
 
     let mut new_screenplay_doc: ScreenplayDocument = ScreenplayDocument::default();
@@ -292,8 +326,8 @@ environtment_strs_opt: Option<EnvironmentStrings>) -> Option<screenplay_document
         // We should let the user pass in multiple ranges of indentations, optionally
         // but that's not necessary right now for basic functionality
         let mut current_resolution: f64 = 72.0;
-        let mut element_indentaions_pts = ElementIndentationsPoints::default();
-        if let Some(ref indentations) = element_indentations{
+        let element_indentaions_pts;
+        if let Some(ref indentations) = element_indent_in_opt{
             element_indentaions_pts = ElementIndentationsPoints::from_inches(indentations, &Some(current_resolution));
         } else {
             element_indentaions_pts = ElementIndentationsPoints::us_letter_default(&Some(current_resolution));
@@ -301,7 +335,6 @@ environtment_strs_opt: Option<EnvironmentStrings>) -> Option<screenplay_document
         for pdf_line in pdf_page.lines.iter() {
             if pdf_line.words.len() < 1 {continue};
 
-            let mut line_revised: bool = false;
             let mut new_line = screenplay_document::Line::default();
             let mut previous_element_type: SPType = SPType::NONE;
             let mut word_counter: usize = 0;
@@ -313,7 +346,8 @@ environtment_strs_opt: Option<EnvironmentStrings>) -> Option<screenplay_document
                 &new_line,
                 &element_indentaions_pts,
                 &time_of_day_strs,
-                &environment_strs);
+                &environment_strs,
+                &r_marker);
 
                 println!("New type! {:?}", new_word_type);
                 new_text_element.element_position = Some(pdf_word.position.clone());
@@ -350,17 +384,20 @@ environtment_strs_opt: Option<EnvironmentStrings>) -> Option<screenplay_document
                             new_line.line_type = Some(SPType::SP_SCENE_HEADING(SceneHeadingElement::Line));
                         },
 
-                        //SPECIAL CASES -- DON'T add the following as TEXT ELEMENTS later down
+                        //SPECIAL CASES -- still add these elements to the line, but
+                        // ALSO update the relevant metadata
+                        // any element needs to still be available in the screenplay document, so we can
+                        // re-assign it after parsing, if necessary
 
                         SPType::SP_PAGENUM => {
                             new_page.page_number = Some(PageNumber(pdf_word.text.clone()));
-                            continue;
+                            //continue;
                         },
                         SPType::SP_PAGE_REVISION_LABEL => {
                             // TODO: parse revision label for COLOR and DATE
                             // then ADD metadata to PAGE
                             new_page.revised = true;
-                            continue;
+                            //continue;
                         },
                         SPType::NON_CONTENT_TOP 
                         | SPType::NON_CONTENT_BOTTOM
@@ -369,8 +406,9 @@ environtment_strs_opt: Option<EnvironmentStrings>) -> Option<screenplay_document
                             //println!("Non-Content!!!!!");
                             //println!("Current action margin: {}", element_indentaions_pts.action);
                             //println!("{} | {}", new_text_element.element_position.unwrap().x, new_text_element.element_position.unwrap().y);
-                            continue;
+                            //continue;
                         },
+
                         //FIXME: add separate case for LONE ASTERISK or REVISION MARKER,
                         // This is VERY fucking confusing otherwise...
                         SPType::SP_SCENENUM => {
@@ -387,20 +425,25 @@ environtment_strs_opt: Option<EnvironmentStrings>) -> Option<screenplay_document
                                 if !sn.is_empty() {
                                     new_line.scene_number = Some(sn);
                                     use screenplay_document::SceneHeadingElement;
-                                    new_line.line_type = Some(SPType::SP_SCENE_HEADING(SceneHeadingElement::Line));
+                                    match new_line.line_type {
+                                        Some(SPType::NONE) => {
+                                            new_line.line_type = Some(SPType::SP_SCENE_HEADING(SceneHeadingElement::Line));
+
+                                        }
+                                        _ => {}
+                                    }
                                     previous_element_type = SPType::SP_SCENENUM;
                                 }
                             }
                             
 
-                            continue; 
+                            //continue; 
                         },
                         SPType::SP_LINE_REVISION_MARKER =>
                         {
                             new_line.revised = true;
-                            line_revised = true;
                             previous_element_type = SPType::SP_LINE_REVISION_MARKER;
-                            continue;
+                            //continue;
                         }
 
                         _ => {
@@ -436,6 +479,7 @@ environtment_strs_opt: Option<EnvironmentStrings>) -> Option<screenplay_document
                                 }
                             }
                         } else {
+                            //FIXME: WTF does this whole if block even do???? Why does this print so often???
                             println!("NEW TEXT ELEMENT OVERLAPS PREVIOUS ELEMENT! Assigned 1 unit of preceding whtiespace...");
                             new_text_element.preceding_whitespace_chars = 1
                         }
@@ -471,14 +515,30 @@ environtment_strs_opt: Option<EnvironmentStrings>) -> Option<screenplay_document
                 continue;
             }
 
-            //TODO: Create a new Scene struct --AFTER fixing the scene heading parsing...
+            // SCENE PARSING
 
             if let Some(last_line) = &new_page.lines.last() {
 
                 match new_line.line_type {
                     None => {},
-                    Some(SPType::SP_SCENE_HEADING(_)) => {
-                        //panic!();
+                    Some(SPType::SP_SCENE_HEADING(SceneHeadingElement::Line)) => {
+                        println!("err ------------------------------- CURRENT LINE: {:#?}", new_line);
+                        let maybe_first_word = &new_line.text_elements
+                            .iter()
+                            .filter(|te| te.element_type == Some(SPType::SP_SCENE_HEADING(SceneHeadingElement::Environment)))
+                            .take(1)
+                            .next();
+                            //.collect::<Vec<&TextElement>>();
+
+                        let mut new_line_env = Environment::Ext;
+
+                        if let Some(fw) = maybe_first_word {
+                            new_line_env = Environment::from_str(&fw.text, &environment_strs).unwrap();
+                        }
+                        
+
+
+
                         let new_scene = Scene {
                             number: {
                                 if let Some(number) = &new_line.scene_number.clone(){
@@ -488,14 +548,7 @@ environtment_strs_opt: Option<EnvironmentStrings>) -> Option<screenplay_document
                                     None
                                 }
                             },
-                            environment: Environment::from_str(
-                                &new_line.text_elements
-                                    .iter()
-                                    .find(|te| te.element_type == Some(SPType::SP_SCENE_HEADING(SceneHeadingElement::Environment)))
-                                    .unwrap()
-                                    .text,
-                                &environment_strs
-                            ).unwrap(),
+                            environment: new_line_env,
                             start: ScreenplayCoordinate {
                                 page: new_screenplay_doc.pages.len() as u64 + {if new_screenplay_doc.pages.len() > 0 {1} else {0}},
                                 line: new_page.lines.len() as u64,

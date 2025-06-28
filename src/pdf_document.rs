@@ -19,7 +19,7 @@ impl ElementIndentationsInches {
             top: 10.0,
             bottom: 1.0,
             left: 1.5,
-            right: 7.5,
+            right: 7.5 + 7.2,
             pageheight: 11.0,
             pagewidth: 8.5,
             action: 1.5,
@@ -29,19 +29,65 @@ impl ElementIndentationsInches {
         }
     }
 
+    pub fn top(mut self, new_top: f64) -> Self {
+        self.top = new_top;
+        self
+    }
+
+    pub fn bottom(mut self, new_bottom: f64) -> Self {
+        self.bottom = new_bottom;
+        self
+    }
+    pub fn left(mut self, new_left: f64) -> Self {
+        self.left = new_left;
+        self
+    }
+    pub fn right(mut self, new_right: f64) -> Self {
+        self.right = new_right;
+        self
+    }
+
+    //
+
+    pub fn pageheight(mut self, new_pageheight: f64) -> Self {
+        self.pageheight = new_pageheight;
+        self
+    }
+    pub fn pagewidth(mut self, new_pagewidth: f64) -> Self {
+        self.pagewidth = new_pagewidth;
+        self
+    }
+
+    pub fn action(mut self, new_action: f64) -> Self {
+        self.action = new_action;
+        self
+    }
+    pub fn character(mut self, new_character: f64) -> Self {
+        self.character = new_character;
+        self
+    }
+    pub fn dialogue(mut self, new_dialogue: f64) -> Self {
+        self.dialogue = new_dialogue;
+        self
+    }
+    pub fn parenthetical(mut self, new_parenthetical: f64) -> Self {
+        self.parenthetical = new_parenthetical;
+        self
+    }
+
     pub fn from_points(indentations: &ElementIndentationsPoints, resolution: &f64) -> ElementIndentationsInches {
-            ElementIndentationsInches {
-                top: indentations.top / resolution,
-                bottom: indentations.bottom / resolution,
-                pagewidth: indentations.pagewidth / resolution,
-                pageheight: indentations.pageheight / resolution,
-                left: indentations.left / resolution,
-                right: indentations.right / resolution,
-                action: indentations.action / resolution,
-                character: indentations.character / resolution,
-                dialogue: indentations.dialogue / resolution,
-                parenthetical: indentations.parenthetical / resolution
-            }
+        ElementIndentationsInches {
+            top: indentations.top / resolution,
+            bottom: indentations.bottom / resolution,
+            pagewidth: indentations.pagewidth / resolution,
+            pageheight: indentations.pageheight / resolution,
+            left: indentations.left / resolution,
+            right: indentations.right / resolution,
+            action: indentations.action / resolution,
+            character: indentations.character / resolution,
+            dialogue: indentations.dialogue / resolution,
+            parenthetical: indentations.parenthetical / resolution
+        }
     }
 }
 
@@ -116,12 +162,12 @@ pub struct TextPosition {
     pub x: f64,
     pub y: f64,
 }
-#[derive(Default)]
+#[derive(Default, Debug)]
 pub struct PageSize {
     pub width: f64,
     pub height: f64,
 }
-#[derive(Default)]
+#[derive(Default, Debug)]
 pub struct Word {
     pub text: String,
     pub bbox_width: f64,
@@ -131,11 +177,11 @@ pub struct Word {
     pub font_size: f64,
     pub font_character_width: f64,
 }
-#[derive(Default)]
+#[derive(Default, Debug)]
 pub struct Line {
     pub words:Vec<Word>
 }
-#[derive(Default)]
+#[derive(Default, Debug)]
 pub struct Page {
     pub lines: Vec<Line>,
     pub page_size: PageSize
