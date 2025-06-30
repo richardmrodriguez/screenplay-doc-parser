@@ -1,8 +1,11 @@
+
 //! This module is responsible for interpereting a (hopefully properlyformatted)
 //! PDF document into a usable, semantically-typed ScreenplayDocument structure.
 
 use core::num;
 use core::time;
+use std::collections::HashMap;
+use std::hash::Hash;
 use std::ops::Not;
 
 use uuid::Uuid;
@@ -22,6 +25,71 @@ use crate::screenplay_document::SceneID;
 use crate::screenplay_document::SceneNumber;
 use crate::screenplay_document::ScreenplayCoordinate;
 use crate::screenplay_document::TextElement;
+
+pub mod indentations_deducer;
+
+pub fn deduce_indentations(pdfdoc: &pdf_document::PDFDocument) -> Option<ElementIndentationsInches> {
+    
+    let mut x_pos_vec: Vec<f64> = Vec::default();
+
+    let mut lines_count = 0;
+    for page in &pdfdoc.pages {
+        for ln in &page.lines {
+            if let Some(word) = ln.words.first() {
+                x_pos_vec.push(word.position.x);
+                lines_count +=1;
+            }
+        }
+    }
+
+    let mut x_freq_map: HashMap<i32, i32> = HashMap::new();
+
+    for entry in x_pos_vec {
+        let rounded = entry.round() as i32;
+        let new_ent = x_freq_map.entry(rounded).or_insert(0);
+        *new_ent += 1;
+    }
+
+    let mut x_freq_keys: Vec<i32> = x_freq_map.keys().cloned().collect();
+    x_freq_keys.sort();
+
+    for fk in &x_freq_keys {
+        let v = x_freq_map.get(&fk); 
+        println!(
+            "INDENT_INCHES: {:10.2} FREQUENCY: {:6.2}%",
+            fk.clone() as f64 / 72.0,
+            {
+                if let Some(freq) = v {
+                    let fr = *freq;
+                    (fr as f64 / lines_count as f64) *100.0
+                }
+                else {
+                    0.0
+                }
+            }
+        
+        )
+    }
+    
+    None
+}
+
+fn _is_word_within_content_zone(
+        pdf_word: &pdf_document::Word, 
+        element_indentaions_pts: &ElementIndentationsPoints
+    ) -> bool {
+    todo!()
+}
+
+
+fn _check_non_content_type(pdf_word: &pdf_document::Word,
+    new_line: &screenplay_document::Line,
+    element_indentaions_pts: &ElementIndentationsPoints,
+    time_of_day_strs: &screenplay_document::TimeOfDayCollection,
+    environment_strs: &screenplay_document::EnvironmentStrings,
+    r_marker: &String) -> Option<SPType> {
+        todo!()
+    }
 
 fn _get_type_for_word(pdf_word: &pdf_document::Word,
     new_line: &screenplay_document::Line,
@@ -46,54 +114,28 @@ fn _get_type_for_word(pdf_word: &pdf_document::Word,
     };
 
     //TODO: FIXME: Calculate actual character width from font metrics...
-    let char_width = pdf_word.font_size * 0.6; 
+    let char_width = pdf_word.font_size * 0.6; // should be ~7.2 for 12-point font
     let position_tolerance: f64 = 0.01;
-
     
-    match &new_line.line_type {
-        None => {},
-        Some(t) => {
-            match t {
-                SPType::SP_SCENE_HEADING(_) => {
-                    if pdf_word.position.x >= element_indentaions_pts.right {
-                        if pdf_word.text == *r_marker {
-                            return Some(SPType::SP_LINE_REVISION_MARKER);
-                        }
-                        return Some(SPType::SP_SCENENUM);
-                    }
-                },
-
-                _ => {}
-
-            }
-
-        }
-    }
     
     // check current line type ...
-    if (new_line.line_type == Some(SPType::SP_SCENE_HEADING(SceneHeadingElement::Line))) && (pdf_word.position.x >= element_indentaions_pts.right) {
+    if (new_line.line_type == Some(SPType::SP_SCENE_HEADING(SceneHeadingElement::Line))) 
+    && (pdf_word.position.x >= element_indentaions_pts.right) {
+        
         if pdf_word.text == *r_marker {
             return Some(SPType::SP_LINE_REVISION_MARKER);
         }
         return Some(SPType::SP_SCENENUM);
     }
+    
 
 
 
     // first pass of Word Type -- check previous element types first
     match previous_element_type {
-        //FIXME: SHORT-SIGHTED; Does not account for dual dialogue...
-        SP_DIALOGUE => {
-            return Some(SP_DIALOGUE);
-        }
-        /* 
-        SP_ACTION => {    
-            //FIXME: WRONG
-            //return Some(SPType::SP_ACTION)
-        }
-        */
+        // if previous type was "content" types...
         
-        SP_SCENE_HEADING(SceneHeadingElement::TimeOfDay) => {
+        SPType::SP_SCENE_HEADING(SceneHeadingElement::TimeOfDay) => {
             if pdf_word.text == "-".to_string() {
                 return Some(SPType::SP_SCENE_HEADING(SceneHeadingElement::Separator));
             }
@@ -136,27 +178,38 @@ fn _get_type_for_word(pdf_word: &pdf_document::Word,
 
             }
         }
-        SPType::SP_PARENTHETICAL => {return Some(previous_element_type.clone())},
+        SPType::SP_PARENTHETICAL => {
+            return Some(previous_element_type.clone())
+        }
         SPType::SP_SCENE_HEADING(SceneHeadingElement::SubLocation) => {
             if pdf_word.text == "-".to_string() {
                 return Some(SP_SCENE_HEADING(SceneHeadingElement::Separator));
             }
             return Some(SP_SCENE_HEADING(SceneHeadingElement::SubLocation));
-        },
+        }
         SPType::SP_SCENE_HEADING(SceneHeadingElement::Location)=> {
             if pdf_word.text == "-".to_string() {
                 return Some(SP_SCENE_HEADING(SceneHeadingElement::Separator));
             }
             return Some(SP_SCENE_HEADING(SceneHeadingElement::Location));
             
-        },
-        SP_SCENE_HEADING(SceneHeadingElement::Environment) => {
+        }
+        SPType::SP_SCENE_HEADING(SceneHeadingElement::Environment) => {
             return Some(SP_SCENE_HEADING(SceneHeadingElement::Location));
-        },
+        }
         SPType::SP_CHARACTER => {
+            // TODO:
+            // Create a function that checks all the "non-content-types"
+            // and returns that as an optional SPType
+            // then just match against that for every content type
+            // if it's non-content, then return that type
+            // else if it's content, then handle that within this block
             if pdf_word.text.starts_with("(") {
                 return Some(SPType::SP_CHARACTER_EXTENSION);
             } else {
+                if pdf_word.text == *r_marker {
+                    return Some(SPType::SP_LINE_REVISION_MARKER);
+                }
                 return Some(SPType::SP_CHARACTER);
             }
         },
@@ -178,9 +231,11 @@ fn _get_type_for_word(pdf_word: &pdf_document::Word,
         
         _ => {
             
+            // ------------- INDENTATION PARSING --------------------------
+
             // Within Vertical Content Zone after this point
             
-            println!("{}", pdf_word.position.y - element_indentaions_pts.top);
+            //println!("{}", pdf_word.position.y - element_indentaions_pts.top);
             if pdf_word.position.y < element_indentaions_pts.top 
             && pdf_word.position.y > element_indentaions_pts.bottom {
                 
@@ -189,19 +244,24 @@ fn _get_type_for_word(pdf_word: &pdf_document::Word,
                 
                 if pdf_word.position.x < element_indentaions_pts.left {
                     return Some(SPType::SP_SCENENUM);
-                } else if pdf_word.position.x >= element_indentaions_pts.right {
+                } 
+                /* 
+                */
+                else if pdf_word.position.x >= element_indentaions_pts.right {
                     if pdf_word.text == *r_marker {
                         return Some(SPType::SP_LINE_REVISION_MARKER);
                     }
                     return Some(SPType::SP_SCENENUM);
-                } else {
+                } 
+                else {
                     
                     
                     let _within_tolerance  = |target| {
                         if (&pdf_word.position.x - &target).abs() > position_tolerance {
                             return false;
-                        }
-                        else {return true};
+                        } else {
+                            return true;
+                        };
                     };
                     
                     //Within Vertical AND Horizontal Content Zone after this point
@@ -212,29 +272,26 @@ fn _get_type_for_word(pdf_word: &pdf_document::Word,
                         
                         if let Some(_) = Environment::from_str(&pdf_word.text, environment_strs) {
                             return Some(SP_SCENE_HEADING(SceneHeadingElement::Environment));
-                        } else {
+                        } else if new_line.line_type == None {
                             return Some(SPType::SP_ACTION);
                         };
                     }
-                    if _within_tolerance(element_indentaions_pts.character) {
+                    if _within_tolerance(element_indentaions_pts.character)
+                    && new_line.line_type == None {
                         
                         return Some(SPType::SP_CHARACTER);
                     }
-                    else if _within_tolerance(element_indentaions_pts.dialogue) {
+                    else if _within_tolerance(element_indentaions_pts.dialogue) 
+                    && new_line.line_type == None{
                         return Some(SPType::SP_DIALOGUE);
                     }
-                    else if _within_tolerance(element_indentaions_pts.parenthetical) {
+                    else if _within_tolerance(element_indentaions_pts.parenthetical)
+                    && pdf_word.text.starts_with("(")
+                    && new_line.line_type == None {
+
                         return Some(SPType::SP_PARENTHETICAL);
                     }
                     else {
-                        /* 
-                        if pdf_word.text == "BETTY".to_string(){
-                            println!("{:#?}", pdf_word);
-                            println!("{:#?}", element_indentaions_pts.character);
-                            panic!();
-                            
-                        }
-                        */
                         return None;
                     }
                 };
@@ -248,8 +305,9 @@ fn _get_type_for_word(pdf_word: &pdf_document::Word,
                 let rightedge: f64 = wordwidth + pdf_word.position.x;
                 if pdf_word.position.x < element_indentaions_pts.pagewidth / 3.0 {
                     return Some(SPType::NON_CONTENT_TOP);
-                } else if (rightedge - element_indentaions_pts.right) < position_tolerance
-                && (pdf_word.text.ends_with(".")) {
+                } else if (element_indentaions_pts.pagewidth - pdf_word.position.x) 
+                < (element_indentaions_pts.pagewidth / 4.0)
+                    && (pdf_word.text.ends_with(".")) {
                     return Some(SPType::SP_PAGENUM);
                 }
                 else {
@@ -308,6 +366,7 @@ env_strs_opt: Option<EnvironmentStrings>) -> Option<screenplay_document::Screenp
     
     for pdf_page in doc.pages.iter(){
         if pdf_page.lines.len() < 1 {continue};
+        // TODO: abstract out the "line handling" logic into "fn get_line()"??
 
         let mut new_page = screenplay_document::Page::default();
 
@@ -352,15 +411,20 @@ env_strs_opt: Option<EnvironmentStrings>) -> Option<screenplay_document::Screenp
                 println!("New type! {:?}", new_word_type);
                 new_text_element.element_position = Some(pdf_word.position.clone());
 
-                if let Some(nt) = new_word_type {
+                if let Some(nwt) = new_word_type {
                     
-                    match nt {
+                    match nwt {
                         // Assign proper LINE TYPEs based on current WORD type
                         SPType::SP_DIALOGUE => {
-                            new_line.line_type = Some(SPType::SP_DIALOGUE);
+                            if new_line.line_type == None {
+                                new_line.line_type = Some(SPType::SP_DIALOGUE);
+
+                            }
                         },
                         SPType::SP_PARENTHETICAL => {
-                            new_line.line_type = Some(SPType::SP_PARENTHETICAL);
+                            if new_line.line_type == None {
+                                new_line.line_type = Some(SPType::SP_PARENTHETICAL);
+                            }
                         },
                         SPType::SP_DD_L_PARENTHETICAL
                         | SPType::SP_DD_R_PARENTHETICAL
@@ -369,19 +433,30 @@ env_strs_opt: Option<EnvironmentStrings>) -> Option<screenplay_document::Screenp
                             new_line.line_type = Some(SPType::SP_DUAL_DIALOGUES);
                         },
                         SPType::SP_CHARACTER => {
-                            new_line.line_type = Some(SPType::SP_CHARACTER);
+                            if new_line.line_type == None {
+                                new_line.line_type = Some(SPType::SP_CHARACTER);
+                            }
                         },
                         SPType::SP_DD_L_CHARACTER 
                         | SPType::SP_DD_R_CHARACTER => {
-                            new_line.line_type = Some(SPType::SP_DUAL_CHARACTERS);
+                            if new_line.line_type == None {
+
+                                new_line.line_type = Some(SPType::SP_DUAL_CHARACTERS);
+                            }
                         },
                         SPType::SP_ACTION => {
-                            new_line.line_type = Some(SPType::SP_ACTION);
+                            if new_line.line_type == None {
+
+                                new_line.line_type = Some(SPType::SP_ACTION);
+                            }
                             
                         },
                         SPType::SP_SCENE_HEADING(SceneHeadingElement::Environment) => {
                             use screenplay_document::SceneHeadingElement;
-                            new_line.line_type = Some(SPType::SP_SCENE_HEADING(SceneHeadingElement::Line));
+                            if new_line.line_type == None {
+                                new_line.line_type = Some(SPType::SP_SCENE_HEADING(SceneHeadingElement::Line));
+
+                            }
                         },
 
                         //SPECIAL CASES -- still add these elements to the line, but
@@ -390,6 +465,10 @@ env_strs_opt: Option<EnvironmentStrings>) -> Option<screenplay_document::Screenp
                         // re-assign it after parsing, if necessary
 
                         SPType::SP_PAGENUM => {
+                            if new_line.line_type == None {
+                                new_line.line_type = Some(SPType::SP_PAGE_HEADER);
+
+                            }
                             new_page.page_number = Some(PageNumber(pdf_word.text.clone()));
                             //continue;
                         },
@@ -408,19 +487,18 @@ env_strs_opt: Option<EnvironmentStrings>) -> Option<screenplay_document::Screenp
                             //println!("{} | {}", new_text_element.element_position.unwrap().x, new_text_element.element_position.unwrap().y);
                             //continue;
                         },
-
-                        //FIXME: add separate case for LONE ASTERISK or REVISION MARKER,
-                        // This is VERY fucking confusing otherwise...
                         SPType::SP_SCENENUM => {
                             //println!(" ---------SCENE NUMBER -------");
                             
                             if pdf_word.text.contains(&r_marker) {
                                 new_line.revised = true;
                             }
-                            let maybe_scene_num = Some(pdf_word.text.trim_matches('*')
-                            .to_string()
-                            .trim_matches('.')
-                            .to_string());
+                            let maybe_scene_num = Some(pdf_word.text
+                                .trim_matches('*') //FIXME: This DOESN'T trim out the arbitrary user-defined revision marker! only asterisk! Fix this!
+                                .to_string()
+                                .trim_matches('.')
+                                .to_string()
+                            );
                             if let Some(sn) = maybe_scene_num {
                                 if !sn.is_empty() {
                                     new_line.scene_number = Some(sn);
@@ -517,7 +595,7 @@ env_strs_opt: Option<EnvironmentStrings>) -> Option<screenplay_document::Screenp
 
             // SCENE PARSING
 
-            if let Some(last_line) = &new_page.lines.last() {
+            if let Some(last_line) = new_page.lines.last() {
 
                 match new_line.line_type {
                     None => {},
@@ -528,7 +606,6 @@ env_strs_opt: Option<EnvironmentStrings>) -> Option<screenplay_document::Screenp
                             .filter(|te| te.element_type == Some(SPType::SP_SCENE_HEADING(SceneHeadingElement::Environment)))
                             .take(1)
                             .next();
-                            //.collect::<Vec<&TextElement>>();
 
                         let mut new_line_env = Environment::Ext;
 
@@ -541,8 +618,8 @@ env_strs_opt: Option<EnvironmentStrings>) -> Option<screenplay_document::Screenp
 
                         let new_scene = Scene {
                             number: {
-                                if let Some(number) = &new_line.scene_number.clone(){
-                                    Some(SceneNumber(number.clone()))
+                                if let Some(num) = &new_line.scene_number.clone(){
+                                    Some(SceneNumber(num.clone()))
                                 }
                                 else {
                                     None
@@ -586,6 +663,8 @@ env_strs_opt: Option<EnvironmentStrings>) -> Option<screenplay_document::Screenp
                             
                             
                         };
+
+                        
                         new_screenplay_doc.scenes.insert(SceneID(Uuid::new_v4()), new_scene);
                     },
                     _ => {}
@@ -596,6 +675,60 @@ env_strs_opt: Option<EnvironmentStrings>) -> Option<screenplay_document::Screenp
                 
             }
             
+            // line number fixing
+            if let Some(SPType::SP_SCENE_HEADING(SceneHeadingElement::Line)) = new_line.line_type {
+                for te in &mut new_line.text_elements {
+                    if te.element_type == None 
+                    && te.text == new_line.scene_number.clone().unwrap_or("_N?N_".to_string()){
+                        te.element_type = Some(SPType::SP_SCENENUM);
+                        println!("{:?}", te.element_type);
+                        //panic!("this is joey");
+                    }
+                    
+                }
+
+            } else {
+                // Text Element Fixing -- overwrite previous NONE-TYPED elements to the LINE TYPE
+                // if it's content
+                // else leave it alone
+                let mut last_element_type: &Option<SPType> = &None;
+                for te in &mut new_line.text_elements {
+                    if te.element_type == None {
+                        match new_line.line_type {
+                            Some(SPType::SP_ACTION) => {
+                                te.element_type = Some(SPType::SP_ACTION);
+                            }
+                            Some(SPType::SP_CHARACTER) => {
+                                match last_element_type {
+                                    Some(SPType::SP_CHARACTER_EXTENSION) => {
+                                        te.element_type = Some(SPType::SP_CHARACTER_EXTENSION);
+                                    }
+                                    _=>{
+                                        te.element_type = Some(SPType::SP_CHARACTER);
+                                    }
+                                }
+    
+                            }
+                            Some(SPType::SP_DIALOGUE) => {
+                                te.element_type = Some(SPType::SP_DIALOGUE);
+                            }
+                            
+                            _ => {}
+                        }
+
+                    }
+                    
+                    if new_line.line_type == Some(SPType::SP_PAGE_HEADER)
+                    && te.element_type == Some(SPType::NON_CONTENT_TOP) {
+                        
+                        te.element_type = Some(SPType::SP_PAGE_REVISION_LABEL);
+                            
+                    }
+                    last_element_type = &te.element_type
+                }
+                
+            }
+
             
             new_page.lines.push(new_line);
         }

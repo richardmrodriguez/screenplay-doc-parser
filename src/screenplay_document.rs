@@ -202,6 +202,7 @@ pub enum SPType {
     SP_PAGENUM, // Nominal page number
     SP_SCENENUM, // Nominal scene number
 
+    SP_PAGE_HEADER, //LINE --contains the PAGE NUM and potentially a page Revision label
     SP_PAGE_REVISION_LABEL, //may or may not include the date / color (I think it's two lines usually, but it could be one line potentially...?)
     SP_LINE_REVISION_MARKER, // asterisks in the left and/or right margins indicate a line or lines have been revised
 

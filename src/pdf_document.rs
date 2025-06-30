@@ -19,7 +19,7 @@ impl ElementIndentationsInches {
             top: 10.0,
             bottom: 1.0,
             left: 1.5,
-            right: 7.5 + 7.2,
+            right: 7.25, // Final Draft default???
             pageheight: 11.0,
             pagewidth: 8.5,
             action: 1.5,

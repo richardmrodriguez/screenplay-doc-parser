@@ -12,7 +12,7 @@ pub mod mupdf_basic_parser;
 #[cfg(test)]
 mod tests {
 
-    use crate::{pdf_document::{ElementIndentationsPoints, PDFDocument, TextPosition}, screenplay_document::{EnvironmentStrings, SPType, TimeOfDayCollection}};
+    use crate::{pdf_document::{ElementIndentationsPoints, PDFDocument, TextPosition}, pdf_parser::deduce_indentations, screenplay_document::{EnvironmentStrings, SPType, TimeOfDayCollection}};
 
     use super::*;
 
@@ -56,18 +56,30 @@ mod tests {
         new_word
     }
 
+    #[test]
+    fn indent_deduction() {
+        
+        let doc_result = mupdf_basic_parser::get_pdf_obj_from_filepath("test_data/VCR2L.pdf".to_string());
+        if let Ok(doc) = doc_result {
+            let indentations_opt = deduce_indentations(&doc);
+        }
+        
+        
+    }
+
     #[cfg(feature="mupdf-basic-parsing")]
     #[test]
     fn test_mupdf_parsing() {
         use mupdf_basic_parser;
 
         let custom_indentations = ElementIndentationsInches::us_letter_default()
-        //.character(3.5)
-        .right(7.6)
+        .character(3.5)
+        //.right(7.25)
         ;
         use crate::{pdf_document::ElementIndentationsInches, screenplay_document::ScreenplayDocument};
         let screenplay_result = mupdf_basic_parser::get_screenplay_doc_from_filepath(
-            "test_data/DraftTest_02.pdf".into(),
+            //"test_data/DraftTest_02.pdf".into(),
+            "test_data/VCR2L.pdf".into(),
             Some(custom_indentations),
             None,
             None,
@@ -87,7 +99,7 @@ mod tests {
             for line in page.lines {
 
                 println!(
-                    "-----LINE | Y: {:?} | TYPE: {:?} | REVISED: {}",
+                    "-----LINE | Y: {:?} | TYPE: {:?} | REVISED: {} | NUM: {:?}",
                     {
                         if let Some(te) = line.text_elements.first() {
                             if let Some(ep) = te.element_position {
@@ -101,7 +113,8 @@ mod tests {
                         }
                     },
                     line.line_type,
-                    line.revised
+                    line.revised,
+                    line.scene_number
 
                 );
                 for elm in line.text_elements {
