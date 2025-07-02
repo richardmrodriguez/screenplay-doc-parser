@@ -457,6 +457,16 @@ pub struct ScreenplayDocument {
     pub characters: HashMap<CharacterID, Character>
 }
 impl ScreenplayDocument {
+    pub fn new() -> Self {
+        ScreenplayDocument { 
+            pages: Vec::new(), 
+            revisions: None, 
+            scenes: HashMap::new(), 
+            locations: HashMap::new(), 
+            characters: HashMap::new()
+        }
+    }
+
     // ------------ Get LINE...
     pub fn get_lines_for_character_speaking(&self, character: &CharacterID) -> Option<Vec<&ScreenplayCoordinate>> {
         None
