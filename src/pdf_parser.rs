@@ -13,8 +13,10 @@ use uuid::Uuid;
 use crate::pdf_document;
 use crate::pdf_document::ElementIndentationsInches;
 use crate::pdf_document::ElementIndentationsPoints;
+use crate::screenplay_document::Character;
 use crate::screenplay_document::Environment;
 use crate::screenplay_document::EnvironmentStrings;
+use crate::screenplay_document::LocationID;
 use crate::screenplay_document::PageNumber;
 use crate::screenplay_document::SPType;
 
@@ -29,7 +31,7 @@ use crate::screenplay_document::TextElement;
 pub mod indentations_deducer;
 
 pub fn deduce_indentations(pdfdoc: &pdf_document::PDFDocument) -> Option<ElementIndentationsInches> {
-    
+    unimplemented!();
     let mut x_pos_vec: Vec<f64> = Vec::default();
 
     let mut lines_count = 0;
@@ -408,7 +410,7 @@ env_strs_opt: Option<EnvironmentStrings>) -> Option<screenplay_document::Screenp
                 &environment_strs,
                 &r_marker);
 
-                println!("New type! {:?}", new_word_type);
+                //println!("New type! {:?}", new_word_type);
                 new_text_element.element_position = Some(pdf_word.position.clone());
 
                 if let Some(nwt) = new_word_type {
@@ -558,7 +560,7 @@ env_strs_opt: Option<EnvironmentStrings>) -> Option<screenplay_document::Screenp
                             }
                         } else {
                             //FIXME: WTF does this whole if block even do???? Why does this print so often???
-                            println!("NEW TEXT ELEMENT OVERLAPS PREVIOUS ELEMENT! Assigned 1 unit of preceding whtiespace...");
+                            //println!("NEW TEXT ELEMENT OVERLAPS PREVIOUS ELEMENT! Assigned 1 unit of preceding whtiespace...");
                             new_text_element.preceding_whitespace_chars = 1
                         }
                         
@@ -593,12 +595,45 @@ env_strs_opt: Option<EnvironmentStrings>) -> Option<screenplay_document::Screenp
                 continue;
             }
 
-            // SCENE PARSING
-
+            
             if let Some(last_line) = new_page.lines.last() {
-
+                
                 match new_line.line_type {
                     None => {},
+                    // CHARACTER PARSING
+                    Some(SPType::SP_CHARACTER) => {
+                        let mut character_name = String::new();
+                        for element in &new_line.text_elements {
+                            if element.element_type == Some(SPType::SP_CHARACTER) {
+                                if !character_name.is_empty() {
+                                    character_name.push(' ');
+                                }
+                                character_name.push_str(&element.text);
+                            }
+                        }
+                        if character_name.is_empty() {
+                            break;
+                        }
+                        if !&new_screenplay_doc.characters.is_empty() {
+                            let mut character_exists_in_doc = false;
+                            for (_, character) in &new_screenplay_doc.characters {                                    
+                                if character.name == character_name {
+                                    character_exists_in_doc = true;
+                                }
+                            }
+                            if character_exists_in_doc {
+                                break;
+                            }
+                        
+                        }
+                        let new_id = screenplay_document::CharacterID::new();
+                        let new_character = Character {
+                            name: character_name,
+                            id: new_id.clone()
+                        };
+                        new_screenplay_doc.characters.insert(new_id, new_character);
+                    }
+                    // SCENE PARSING
                     Some(SPType::SP_SCENE_HEADING(SceneHeadingElement::Line)) => {
                         println!("err ------------------------------- CURRENT LINE: {:#?}", new_line);
                         let maybe_first_word = &new_line.text_elements
@@ -613,9 +648,6 @@ env_strs_opt: Option<EnvironmentStrings>) -> Option<screenplay_document::Screenp
                             new_line_env = Environment::from_str(&fw.text, &environment_strs).unwrap();
                         }
                         
-
-
-
                         let new_scene = Scene {
                             number: {
                                 if let Some(num) = &new_line.scene_number.clone(){
@@ -627,26 +659,12 @@ env_strs_opt: Option<EnvironmentStrings>) -> Option<screenplay_document::Screenp
                             },
                             environment: new_line_env,
                             start: ScreenplayCoordinate {
-                                page: new_screenplay_doc.pages.len() as u64 + {if new_screenplay_doc.pages.len() > 0 {1} else {0}},
-                                line: new_page.lines.len() as u64,
+                                page: new_screenplay_doc.pages.len() + {if new_screenplay_doc.pages.len() > 0 {1} else {0}},
+                                line: new_page.lines.len(),
                                 element: None
                             },
                             revised: new_line.revised,
-                            story_location: screenplay_document::Location { 
-                                strings: {
-                                    
-                                    new_line.text_elements
-                                    .iter()
-                                    .filter(
-                                        |el| el.element_type == Some(SPType::SP_SCENE_HEADING(SceneHeadingElement::Location))
-                                    )
-                                    .map(|el| el.text.clone())
-                                    .collect()
-                                    
-                                }, 
-                                sublocations: None, // TODO: ????????
-                                superlocation: None //TODO: ???????? what the fuck are these supposed to do...
-                            },
+                            story_location: LocationID::new(),  //TODO: replace with ACTUAL implementation // IF location exists, use existing ID ELSE create new location AND NEW ID
                             story_sublocation: None, // could be multiple sublocations ...... ARGHHHHHH
                             story_time_of_day: {
                                 let maybe_time: Vec<TextElement> = new_line.text_elements
@@ -665,7 +683,7 @@ env_strs_opt: Option<EnvironmentStrings>) -> Option<screenplay_document::Screenp
                         };
 
                         
-                        new_screenplay_doc.scenes.insert(SceneID(Uuid::new_v4()), new_scene);
+                        new_screenplay_doc.scenes.insert(SceneID::new(), new_scene);
                     },
                     _ => {}
                 }

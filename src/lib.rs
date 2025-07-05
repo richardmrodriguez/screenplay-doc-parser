@@ -93,8 +93,24 @@ mod tests {
         else {
             screenplay = screenplay_result.unwrap()
         }
-        
+
+        if screenplay.characters.is_empty() {
+            println!("NO CHARACTERS FOUND!");
+        }
+        for (id,character)  in &screenplay.characters {
+            println!(
+                "CHARACTER ID: {:?} | CHARACTER: {:?}",
+                id, character.name
+            );
+        }
+        let print_pages: bool = false;
+
         for page in screenplay.pages {
+            
+
+            if !print_pages {
+                break;
+            }
             println!("PAGE");
             for line in page.lines {
 
