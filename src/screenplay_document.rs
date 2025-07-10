@@ -1,7 +1,12 @@
 use crate::{pdf_document, screenplay_document};
 use serde::de::IntoDeserializer;
 use std::{
-    collections::{HashMap, HashSet}, default, hash::Hash, ops::{Deref, DerefMut}, panic::Location, time::SystemTime
+    collections::{HashMap, HashSet},
+    default,
+    hash::Hash,
+    ops::{Deref, DerefMut},
+    panic::Location,
+    time::SystemTime,
 };
 use uuid::Uuid;
 
@@ -409,14 +414,13 @@ pub struct LocationNode {
     pub superlocation: Option<LocationID>, //
 }
 impl LocationNode {
-
     ///
     /// Determines if a path exists under this LocationNode.
-    /// 
-    /// ``` 
+    ///
+    /// ```
     /// let mut screenplay_doc = screenplay_document::ScreenplayDocument::new();
     /// ```
-    /// 
+    ///
     pub fn check_if_subpath_exists(
         &self,
         path: &[String],
@@ -427,7 +431,7 @@ impl LocationNode {
         }
 
         let path_root = &path[0];
-        
+
         for id in &self.sublocations {
             let Some(location) = screenplay.get_location(&id) else {
                 continue;
@@ -436,17 +440,14 @@ impl LocationNode {
                 if path.len() == 1 {
                     return Some((id.clone(), Vec::new()));
                 }
-                if path.len() > 1
-                && location.sublocations.is_empty() {
+                if path.len() > 1 && location.sublocations.is_empty() {
                     return Some((id.clone(), Vec::from(&path[1..])));
-                }         
+                }
                 return location.check_if_subpath_exists(&path[1..], screenplay);
             }
         }
 
         None
-        
-
     }
 }
 
@@ -513,34 +514,32 @@ impl ScreenplayDocument {
 
     ///
     /// Determines if a "location path" exists.
-    /// 
+    ///
     /// Returns `None` if nothing matches the root of the path.
-    /// 
+    ///
     /// Returns `Some((&LocationID, Vec<String>))` if a partial match is found.
-    /// 
-    /// The caller can afterwards handle creating the rest of the Location path, 
+    ///
+    /// The caller can afterwards handle creating the rest of the Location path,
     /// and appending a new LocationID to the sublocations field
-    /// 
+    ///
     /// TODO: Create a test script with SUBLOCATIONS!
-    /// 
+    ///
     pub fn check_if_location_path_exists(
         &self,
         path: &[String],
-        root: Option<&LocationID>
     ) -> Option<(LocationID, Vec<String>)> {
         if path.is_empty() {
             return None;
         }
 
         let path_root = &path[0];
-        
+
         for (id, location) in &self.locations {
             if location.string == *path_root {
                 if path.len() == 1 {
                     return Some((id.clone(), Vec::new()));
                 }
-                if path.len() > 1
-                && location.sublocations.is_empty() {
+                if path.len() > 1 && location.sublocations.is_empty() {
                     return Some((id.clone(), Vec::from(&path[1..])));
                 }
                 return location.check_if_subpath_exists(&path[1..], &self);
@@ -548,8 +547,6 @@ impl ScreenplayDocument {
         }
 
         None
-        
-
     }
 
     pub fn get_location(&self, id: &LocationID) -> Option<&LocationNode> {
