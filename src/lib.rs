@@ -88,7 +88,7 @@ mod tests {
         };
         let screenplay_result = mupdf_basic_parser::get_screenplay_doc_from_filepath(
             //"test_data/DraftTest_02.pdf".into(),
-            "test_data/DraftTest_02.pdf".into(),
+            "test_data/LocationsTest.pdf".into(),
             Some(custom_indentations),
             None,
             None,
@@ -102,11 +102,19 @@ mod tests {
             screenplay = screenplay_result.unwrap()
         }
 
+        let scenes_opt = screenplay.get_all_scenes_sorted();
+        if let Some(scenes) = scenes_opt {
+            for scn in scenes {
+                println!("SCENE: {:?}", scn);
+            }
+            println!("");
+        }
+
         for (id, location) in &screenplay.locations {
             println!("LOCATION_ID: {:?}, | LOCATION: {:}", id, location.string)
         }
-
-        println!("{:?}", screenplay.check_if_location_path_exists(&["THRIFT SHOP".to_string()], None));
+        let path = vec!["MOUNTAINSIDE".to_string(), "CAVE OPENING".to_string()];
+        println!("{:?}", screenplay.check_if_location_path_exists(&path));
 
         println!("\n-----\n");
 

@@ -17,8 +17,8 @@ use crate::pdf_document::ElementIndentationsPoints;
 use crate::screenplay_document::Character;
 use crate::screenplay_document::Environment;
 use crate::screenplay_document::EnvironmentStrings;
-use crate::screenplay_document::LocationNode;
 use crate::screenplay_document::LocationID;
+use crate::screenplay_document::LocationNode;
 use crate::screenplay_document::PageNumber;
 use crate::screenplay_document::SPType;
 
@@ -574,168 +574,159 @@ pub fn get_screenplay_doc_from_pdf_obj(
                 continue;
             }
 
-            if let Some(last_line) = new_page.lines.last() {
-                match new_line.line_type {
-                    None => {}
-                    // CHARACTER PARSING
-                    Some(SPType::SP_CHARACTER) => {
-                        let mut character_name = String::new();
-                        for element in &new_line.text_elements {
-                            if element.element_type == Some(SPType::SP_CHARACTER) {
-                                if !character_name.is_empty() {
-                                    character_name.push(' ');
-                                }
-                                character_name.push_str(&element.text);
+            match new_line.line_type {
+                None => {}
+                // CHARACTER PARSING
+                Some(SPType::SP_CHARACTER) => {
+                    let mut character_name = String::new();
+                    for element in &new_line.text_elements {
+                        if element.element_type == Some(SPType::SP_CHARACTER) {
+                            if !character_name.is_empty() {
+                                character_name.push(' ');
+                            }
+                            character_name.push_str(&element.text);
+                        }
+                    }
+                    if character_name.is_empty() {
+                        break;
+                    }
+                    if !&new_screenplay_doc.characters.is_empty() {
+                        let mut character_exists_in_doc = false;
+                        for (_, character) in &new_screenplay_doc.characters {
+                            if character.name == character_name {
+                                character_exists_in_doc = true;
                             }
                         }
-                        if character_name.is_empty() {
+                        if character_exists_in_doc {
                             break;
                         }
-                        if !&new_screenplay_doc.characters.is_empty() {
-                            let mut character_exists_in_doc = false;
-                            for (_, character) in &new_screenplay_doc.characters {
-                                if character.name == character_name {
-                                    character_exists_in_doc = true;
-                                }
-                            }
-                            if character_exists_in_doc {
-                                break;
-                            }
-                        }
-                        let new_id = screenplay_document::CharacterID::new();
-                        let new_character = Character {
-                            name: character_name,
-                            id: new_id.clone(),
-                        };
-                        new_screenplay_doc.characters.insert(new_id, new_character);
                     }
-                    // SCENE PARSING
-                    Some(SPType::SP_SCENE_HEADING(SceneHeadingElement::Line)) => {
-                        println!(
-                            "err ------------------------------- CURRENT LINE: {:#?}",
-                            new_line
-                        );
-                        let maybe_first_word = &new_line
-                            .text_elements
-                            .iter()
-                            .filter(|te| {
-                                te.element_type
-                                    == Some(SPType::SP_SCENE_HEADING(
-                                        SceneHeadingElement::Environment,
-                                    ))
-                            })
-                            .take(1)
-                            .next();
-
-                        let mut new_line_env = Environment::Ext;
-
-                        if let Some(fw) = maybe_first_word {
-                            new_line_env =
-                                Environment::from_str(&fw.text, &environment_strs).unwrap();
-                        }
-
-                        //Location Parsing
-
-                        let mut root_location_string: String = String::new();
-
-                        for element in &new_line.text_elements {
-                           
-
-                            match element.element_type {
-                                Some(SPType::SP_SCENE_HEADING(SceneHeadingElement::Environment)) => {
-                                    continue;
-                                }
-                                Some(SPType::SP_SCENE_HEADING(SceneHeadingElement::Location)) => {
-                                    
-                                    if !root_location_string.is_empty() {
-                                        root_location_string.push(' ');
-                                    }
-                                    root_location_string.push_str(&element.text.clone());
-                                }
-                                _ => {
-                                    if !root_location_string.is_empty() {
-                                        break;
-                                    }
-                                }
-                            }
-                        }
-
-                        let mut location_id_to_insert: Option<LocationID> = None;
-                        let mut exists: bool = false;
-                        for (existing_id, existing_location) in &new_screenplay_doc.locations {
-                            if root_location_string == existing_location.string {
-                                location_id_to_insert = Some(existing_id.clone());
-                                exists = true;
-                            }
-                        }
-
-                        if !exists {
-                            location_id_to_insert = Some(LocationID::new());
-
-                            let new_location: LocationNode = LocationNode {
-                                string: root_location_string.clone(),
-                                sublocations: HashSet::new(),
-                                superlocation: None,
-                            };
-                            new_screenplay_doc.locations.insert(
-                                location_id_to_insert.clone().unwrap(),
-                                new_location,
-                            );
-                        }
-
-                        // Scene Insertion
-                        let new_scene = Scene {
-                            number: {
-                                if let Some(num) = &new_line.scene_number.clone() {
-                                    Some(SceneNumber(num.clone()))
-                                } else {
-                                    None
-                                }
-                            },
-                            environment: new_line_env,
-                            start: ScreenplayCoordinate {
-                                page: new_screenplay_doc.pages.len() + {
-                                    if new_screenplay_doc.pages.len() > 0 {
-                                        1
-                                    } else {
-                                        0
-                                    }
-                                },
-                                line: new_page.lines.len(),
-                                element: None,
-                            },
-                            revised: new_line.revised,
-                            story_locations: {
-                                if let Some(id) = location_id_to_insert {
-                                    vec![id.clone()]
-                                } else {
-                                    Vec::new()
-                                }
-                            },
-                            story_time_of_day: {
-                                let maybe_time: Vec<TextElement> = new_line
-                                    .text_elements
-                                    .iter()
-                                    .filter(|el| {
-                                        el.element_type
-                                            == Some(SPType::SP_SCENE_HEADING(
-                                                SceneHeadingElement::TimeOfDay,
-                                            ))
-                                    })
-                                    .map(|el| el.clone())
-                                    .collect();
-                                match maybe_time.is_empty() {
-                                    true => None,
-                                    false => time_of_day_strs
-                                        .get_time_of_day(&maybe_time.first().unwrap().text),
-                                }
-                            },
-                        };
-
-                        new_screenplay_doc.scenes.insert(SceneID::new(), new_scene);
-                    }
-                    _ => {}
+                    let new_id = screenplay_document::CharacterID::new();
+                    let new_character = Character {
+                        name: character_name,
+                        id: new_id.clone(),
+                    };
+                    new_screenplay_doc.characters.insert(new_id, new_character);
                 }
+                // SCENE PARSING
+                Some(SPType::SP_SCENE_HEADING(SceneHeadingElement::Line)) => {
+                    println!(
+                        "err ------------------------------- CURRENT LINE: {:#?}",
+                        new_line
+                    );
+                    let maybe_first_word = &new_line
+                        .text_elements
+                        .iter()
+                        .filter(|te| {
+                            te.element_type
+                                == Some(SPType::SP_SCENE_HEADING(SceneHeadingElement::Environment))
+                        })
+                        .take(1)
+                        .next();
+
+                    let mut new_line_env = Environment::Ext;
+
+                    if let Some(fw) = maybe_first_word {
+                        new_line_env = Environment::from_str(&fw.text, &environment_strs).unwrap();
+                    }
+
+                    //Location Parsing
+
+                    let mut root_location_string: String = String::new();
+
+                    for element in &new_line.text_elements {
+                        match element.element_type {
+                            Some(SPType::SP_SCENE_HEADING(SceneHeadingElement::Environment)) => {
+                                continue;
+                            }
+                            Some(SPType::SP_SCENE_HEADING(SceneHeadingElement::Location)) => {
+                                if !root_location_string.is_empty() {
+                                    root_location_string.push(' ');
+                                }
+                                root_location_string.push_str(&element.text.clone());
+                            }
+                            _ => {
+                                if !root_location_string.is_empty() {
+                                    break;
+                                }
+                            }
+                        }
+                    }
+
+                    let mut location_id_to_insert: Option<LocationID> = None;
+                    let mut exists: bool = false;
+                    for (existing_id, existing_location) in &new_screenplay_doc.locations {
+                        if root_location_string == existing_location.string {
+                            location_id_to_insert = Some(existing_id.clone());
+                            exists = true;
+                        }
+                    }
+
+                    if !exists {
+                        location_id_to_insert = Some(LocationID::new());
+
+                        let new_location: LocationNode = LocationNode {
+                            string: root_location_string.clone(),
+                            sublocations: HashSet::new(),
+                            superlocation: None,
+                        };
+                        new_screenplay_doc
+                            .locations
+                            .insert(location_id_to_insert.clone().unwrap(), new_location);
+                    }
+
+                    // Scene Insertion
+                    let new_scene = Scene {
+                        number: {
+                            if let Some(num) = &new_line.scene_number.clone() {
+                                Some(SceneNumber(num.clone()))
+                            } else {
+                                None
+                            }
+                        },
+                        environment: new_line_env,
+                        start: ScreenplayCoordinate {
+                            page: new_screenplay_doc.pages.len() + {
+                                if new_screenplay_doc.pages.len() > 0 {
+                                    1
+                                } else {
+                                    0
+                                }
+                            },
+                            line: new_page.lines.len(),
+                            element: None,
+                        },
+                        revised: new_line.revised,
+                        story_locations: {
+                            if let Some(id) = location_id_to_insert {
+                                vec![id.clone()]
+                            } else {
+                                Vec::new()
+                            }
+                        },
+                        story_time_of_day: {
+                            let maybe_time: Vec<TextElement> = new_line
+                                .text_elements
+                                .iter()
+                                .filter(|el| {
+                                    el.element_type
+                                        == Some(SPType::SP_SCENE_HEADING(
+                                            SceneHeadingElement::TimeOfDay,
+                                        ))
+                                })
+                                .map(|el| el.clone())
+                                .collect();
+                            match maybe_time.is_empty() {
+                                true => None,
+                                false => time_of_day_strs
+                                    .get_time_of_day(&maybe_time.first().unwrap().text),
+                            }
+                        },
+                    };
+
+                    new_screenplay_doc.scenes.insert(SceneID::new(), new_scene);
+                }
+                _ => {}
             }
 
             // line number fixing
