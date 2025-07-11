@@ -110,8 +110,32 @@ mod tests {
             println!("");
         }
 
+        println!("ALL LOCATIONS:");
         for (id, location) in &screenplay.locations {
-            println!("LOCATION_ID: {:?}, | LOCATION: {:}", id, location.string)
+            println!("LOCATION_ID: {:?}, | LOCATION: {:}", id, location.string);
+        }
+
+        println!("-----------LOCATION_HEIRARCHY----------");
+
+        for (id, location) in &screenplay.locations {
+            if location.superlocation.is_none() {
+                println!("LOCATION_ID: {:?}, | LOCATION: {:}", id, location.string);
+                for subloc_id in &location.sublocations {
+                    let Some(sublocation) = screenplay.get_location(&subloc_id) else {
+                        continue;
+                    };
+                    println!(
+                        "    ---- SUBLOCATION_ID: {:?}, | LOCATION: {:}",
+                        subloc_id, sublocation.string
+                    );
+                    for sub_subloc_id in &sublocation.sublocations {
+                      println!(
+                        "    ---- SUBSUBLOCATION_ID: {:?}",
+                        sub_subloc_id, 
+                    );  
+                    }
+                }
+            }
         }
         let path = vec!["MOUNTAINSIDE".to_string(), "CAVE OPENING".to_string()];
         println!("{:?}", screenplay.check_if_location_path_exists(&path));

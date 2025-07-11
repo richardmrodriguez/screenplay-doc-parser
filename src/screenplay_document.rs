@@ -1,7 +1,8 @@
 use crate::{pdf_document, screenplay_document};
+use core::panic;
 use serde::de::IntoDeserializer;
 use std::{
-    collections::{HashMap, HashSet},
+    collections::{HashMap, HashSet, btree_map::Keys},
     default,
     hash::Hash,
     ops::{Deref, DerefMut},
@@ -414,6 +415,10 @@ pub struct LocationNode {
     pub superlocation: Option<LocationID>, //
 }
 impl LocationNode {
+    pub fn add_sublocation(&mut self, new_id: LocationID) -> bool {
+        self.sublocations.insert(new_id)
+    }
+
     ///
     /// Determines if a path exists under this LocationNode.
     ///
@@ -423,31 +428,33 @@ impl LocationNode {
     ///
     pub fn check_if_subpath_exists(
         &self,
-        path: &[String],
+        this_location_id: LocationID,
+        subpath: &[String],
         screenplay: &screenplay_document::ScreenplayDocument,
     ) -> Option<(LocationID, Vec<String>)> {
-        if path.is_empty() {
+        if subpath.is_empty() {
             return None;
         }
 
-        let path_root = &path[0];
+        let subpath_root = &subpath[0];
+        
 
         for id in &self.sublocations {
-            let Some(location) = screenplay.get_location(&id) else {
+            let Some(sublocation) = screenplay.get_location(&id) else {
                 continue;
             };
-            if location.string == *path_root {
-                if path.len() == 1 {
+            if sublocation.string == *subpath_root {
+                if subpath.len() == 1 {
                     return Some((id.clone(), Vec::new()));
                 }
-                if path.len() > 1 && location.sublocations.is_empty() {
-                    return Some((id.clone(), Vec::from(&path[1..])));
+                if subpath.len() > 1 && sublocation.sublocations.is_empty() {
+                    return Some((id.clone(), Vec::from(&subpath[1..])));
                 }
-                return location.check_if_subpath_exists(&path[1..], screenplay);
+                return sublocation.check_if_subpath_exists(id.clone(), &subpath[1..], &screenplay);
             }
         }
 
-        None
+        Some((this_location_id.clone(), subpath.to_vec()))
     }
 }
 
@@ -542,7 +549,8 @@ impl ScreenplayDocument {
                 if path.len() > 1 && location.sublocations.is_empty() {
                     return Some((id.clone(), Vec::from(&path[1..])));
                 }
-                return location.check_if_subpath_exists(&path[1..], &self);
+                
+                return location.check_if_subpath_exists(id.clone(),&path[1..], &self);
             }
         }
 
@@ -551,6 +559,14 @@ impl ScreenplayDocument {
 
     pub fn get_location(&self, id: &LocationID) -> Option<&LocationNode> {
         for (existing_id, loc) in &self.locations {
+            if existing_id == id {
+                return Some(loc);
+            }
+        }
+        None
+    }
+    pub fn get_location_mutable(&mut self, id: &LocationID) -> Option<&mut LocationNode> {
+        for (existing_id, loc) in &mut self.locations {
             if existing_id == id {
                 return Some(loc);
             }

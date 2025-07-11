@@ -8,6 +8,7 @@ use std::collections::HashSet;
 use std::hash::Hash;
 use std::ops::Not;
 use std::process::id;
+use std::sync::RwLockReadGuard;
 
 use uuid::Uuid;
 
@@ -608,12 +609,9 @@ pub fn get_screenplay_doc_from_pdf_obj(
                     };
                     new_screenplay_doc.characters.insert(new_id, new_character);
                 }
-                // SCENE PARSING
+                // SCENE / LOCATION PARSING
                 Some(SPType::SP_SCENE_HEADING(SceneHeadingElement::Line)) => {
-                    println!(
-                        "err ------------------------------- CURRENT LINE: {:#?}",
-                        new_line
-                    );
+                    // Environment Parsing
                     let maybe_first_word = &new_line
                         .text_elements
                         .iter()
@@ -630,20 +628,40 @@ pub fn get_screenplay_doc_from_pdf_obj(
                         new_line_env = Environment::from_str(&fw.text, &environment_strs).unwrap();
                     }
 
-                    //Location Parsing
+                    // Location Parsing
 
                     let mut root_location_string: String = String::new();
 
+                    let mut current_sub_location_string = String::new();
+                    let mut full_path: Vec<String> = Vec::new();
+                    let mut root_location_done = false;
+
                     for element in &new_line.text_elements {
                         match element.element_type {
-                            Some(SPType::SP_SCENE_HEADING(SceneHeadingElement::Environment)) => {
-                                continue;
-                            }
-                            Some(SPType::SP_SCENE_HEADING(SceneHeadingElement::Location)) => {
+                            Some(SPType::SP_SCENE_HEADING(SceneHeadingElement::Location))
+                            | Some(SPType::SP_SCENE_HEADING(SceneHeadingElement::Environment)) 
+                            => {
                                 if !root_location_string.is_empty() {
                                     root_location_string.push(' ');
                                 }
                                 root_location_string.push_str(&element.text.clone());
+                            }
+                            Some(SPType::SP_SCENE_HEADING(SceneHeadingElement::Separator)) => {
+                                if root_location_done {
+                                    if !current_sub_location_string.is_empty() {
+                                        full_path.push(current_sub_location_string.clone());
+                                        current_sub_location_string = String::new();
+                                    }
+                                } else {
+                                    root_location_done = true;
+                                    full_path.push(root_location_string.clone());
+                                }
+                            }
+                            Some(SPType::SP_SCENE_HEADING(SceneHeadingElement::SubLocation)) => {
+                                if !current_sub_location_string.is_empty() {
+                                    current_sub_location_string.push(' ');
+                                }
+                                current_sub_location_string.push_str(&element.text.clone());
                             }
                             _ => {
                                 if !root_location_string.is_empty() {
@@ -655,8 +673,12 @@ pub fn get_screenplay_doc_from_pdf_obj(
 
                     let mut location_id_to_insert: Option<LocationID> = None;
                     let mut exists: bool = false;
-                    for (existing_id, existing_location) in &new_screenplay_doc.locations {
-                        if root_location_string == existing_location.string {
+
+                    for (existing_id, existing_root) in &new_screenplay_doc.locations {
+                        if existing_root.superlocation.is_some() {
+                            continue;
+                        }
+                        if root_location_string == existing_root.string {
                             location_id_to_insert = Some(existing_id.clone());
                             exists = true;
                         }
@@ -665,14 +687,44 @@ pub fn get_screenplay_doc_from_pdf_obj(
                     if !exists {
                         location_id_to_insert = Some(LocationID::new());
 
-                        let new_location: LocationNode = LocationNode {
+                        let new_root_location: LocationNode = LocationNode {
                             string: root_location_string.clone(),
                             sublocations: HashSet::new(),
                             superlocation: None,
                         };
                         new_screenplay_doc
                             .locations
-                            .insert(location_id_to_insert.clone().unwrap(), new_location);
+                            .insert(location_id_to_insert.clone().unwrap(), new_root_location);
+
+
+                    }
+
+                    // Subpath parsing and insertion
+
+                    if let Some((id, s_path)) =
+                        new_screenplay_doc.check_if_location_path_exists(&full_path)
+                    {
+                        
+                        let mut current_id = id.clone();
+
+                        for pathstring in s_path {
+                            if let Some(location) =
+                                &mut new_screenplay_doc.get_location_mutable(&current_id)
+                            {
+                                let new_id = LocationID::new();
+
+                                let new_location = LocationNode {
+                                    string: pathstring.clone(),
+                                    sublocations: HashSet::new(),
+                                    superlocation: Some(current_id.clone()),
+                                };
+                                current_id = new_id.clone();
+                                location.add_sublocation(new_id.clone());
+                                new_screenplay_doc
+                                    .locations
+                                    .insert(new_id.clone(), new_location);
+                            }
+                        }
                     }
 
                     // Scene Insertion
