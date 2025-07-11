@@ -428,7 +428,7 @@ impl LocationNode {
     ///
     pub fn check_if_subpath_exists(
         &self,
-        this_location_id: LocationID,
+        this_location_id: &LocationID,
         subpath: &[String],
         screenplay: &screenplay_document::ScreenplayDocument,
     ) -> Option<(LocationID, Vec<String>)> {
@@ -450,7 +450,7 @@ impl LocationNode {
                 if subpath.len() > 1 && sublocation.sublocations.is_empty() {
                     return Some((id.clone(), Vec::from(&subpath[1..])));
                 }
-                return sublocation.check_if_subpath_exists(id.clone(), &subpath[1..], &screenplay);
+                return sublocation.check_if_subpath_exists(id, &subpath[1..], &screenplay);
             }
         }
 
@@ -550,7 +550,7 @@ impl ScreenplayDocument {
                     return Some((id.clone(), Vec::from(&path[1..])));
                 }
                 
-                return location.check_if_subpath_exists(id.clone(),&path[1..], &self);
+                return location.check_if_subpath_exists(id,&path[1..], &self);
             }
         }
 
