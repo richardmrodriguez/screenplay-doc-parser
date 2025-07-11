@@ -77,6 +77,8 @@ mod tests {
     #[cfg(feature = "mupdf-basic-parsing")]
     #[test]
     fn test_mupdf_parsing() {
+        use std::thread::LocalKey;
+
         use mupdf_basic_parser;
 
         let custom_indentations = ElementIndentationsInches::us_letter_default()
@@ -120,25 +122,33 @@ mod tests {
         for (id, location) in &screenplay.locations {
             if location.superlocation.is_none() {
                 println!("LOCATION_ID: {:?}, | LOCATION: {:}", id, location.string);
-                for subloc_id in &location.sublocations {
-                    let Some(sublocation) = screenplay.get_location(&subloc_id) else {
+                let Some(leafs) = screenplay.get_location_leafs(id.clone()) else {
+                    panic!();
+                };
+                for id in leafs {
+                    let Some(leaf) = screenplay.get_location(&id) else {
                         continue;
                     };
-                    println!(
-                        "    ---- SUBLOCATION_ID: {:?}, | LOCATION: {:}",
-                        subloc_id, sublocation.string
-                    );
-                    for sub_subloc_id in &sublocation.sublocations {
-                      println!(
-                        "    ---- SUBSUBLOCATION_ID: {:?}",
-                        sub_subloc_id, 
-                    );  
-                    }
+                    println!(" ------ LEAF FOR ROOT: {:?} | {:?}", id, leaf.string);
+
                 }
             }
         }
-        let path = vec!["MOUNTAINSIDE".to_string(), "CAVE OPENING".to_string()];
-        println!("{:?}", screenplay.check_if_location_path_exists(&path));
+
+
+       for (id, location) in &screenplay.locations {
+            if location.sublocations.is_empty() {
+
+                println!("LOCATION_ID: {:?}, | LOCATION: {:}", id, location.string);
+                let Some(root) = screenplay.get_location_root(id.clone()) else {
+                    panic!();
+                };
+                let Some(root_node) = screenplay.get_location(&root) else {
+                    panic!()
+                };
+                println!("--------- ROOT FOR LEAF: {:?}, | {:?}", root, root_node.string )
+            }
+       }
 
         println!("\n-----\n");
 

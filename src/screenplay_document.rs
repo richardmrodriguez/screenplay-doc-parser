@@ -437,7 +437,6 @@ impl LocationNode {
         }
 
         let subpath_root = &subpath[0];
-        
 
         for id in &self.sublocations {
             let Some(sublocation) = screenplay.get_location(&id) else {
@@ -549,8 +548,8 @@ impl ScreenplayDocument {
                 if path.len() > 1 && location.sublocations.is_empty() {
                     return Some((id.clone(), Vec::from(&path[1..])));
                 }
-                
-                return location.check_if_subpath_exists(id,&path[1..], &self);
+
+                return location.check_if_subpath_exists(id, &path[1..], &self);
             }
         }
 
@@ -573,16 +572,65 @@ impl ScreenplayDocument {
         }
         None
     }
-    pub fn get_locations_with_matching_str(&self, loc_str: &String) -> Option<Vec<&LocationID>> {
+    pub fn get_locations_with_matching_str(
+        &self,
+        location_string: &String,
+    ) -> Option<Vec<&LocationID>> {
         let mut loc_id_vec: Vec<&LocationID> = Vec::new();
         for (id, location) in &self.locations {
-            if location.string == *loc_str {
+            if location.string == *location_string {
                 loc_id_vec.push(id);
             }
         }
-        if !loc_id_vec.is_empty() {
-            return Some(loc_id_vec);
+        if loc_id_vec.is_empty() {
+            return None;
         }
+        Some(loc_id_vec)
+    }
+
+    // TODO: idk how to do this tree navigation shit without cloning IDs.......
+    // there's most definitely a much better way to do this
+    // maybe immutable reference counting?
+    pub fn get_location_root(&self, location_id: LocationID) -> Option<LocationID> {
+        let Some(location) = self.get_location(&location_id) else {
+            return None;
+        };
+        let Some(superlocation) = &location.superlocation else {
+            return Some(location_id.clone());
+        };
+        return self.get_location_root(superlocation.clone());
+    }
+
+    pub fn get_location_leafs(&self, location_id: LocationID) -> Option<HashSet<LocationID>> {
+        let Some(location) = self.get_location(&location_id) else {
+            return  None;
+        };
+        if location.sublocations.is_empty() {
+            let mut this_leaf_as_set: HashSet<LocationID> = HashSet::new();
+            this_leaf_as_set.insert(location_id);
+            return Some(this_leaf_as_set);
+
+        }
+        let mut location_id_set: HashSet<LocationID> = HashSet::new();
+        for sublocation_id in &location.sublocations {
+            let Some(subset) = self.get_location_leafs(sublocation_id.clone()) else {
+                continue;
+            };
+            location_id_set.extend(subset);
+        }
+        if location_id_set.is_empty() {
+            return None;
+        }
+        Some(location_id_set)
+    }
+
+    pub fn get_locations_with_character(&self, character_name: String) -> Option<Vec<&LocationID>> {
+        unimplemented!();
+        None
+    }
+
+    pub fn get_locations_for_page(&self, page: PageNumID) -> Option<Vec<&LocationID>> {
+        unimplemented!();
         None
     }
 
@@ -864,6 +912,19 @@ impl ScreenplayDocument {
     pub fn get_scenes_on_page_by_page_num_id(&self, id: &PageNumID) -> Option<Vec<&SceneID>> {
         unimplemented!();
         None
+    }
+    pub fn get_scenes_with_location(&self, location: LocationID) -> Option<Vec<&SceneID>> {
+        let scenes: Vec<&SceneID> = self
+            .scenes
+            .iter()
+            .filter(|(_, scn)| scn.story_locations.contains(&location))
+            .map(|(id, _)| id)
+            .collect();
+
+        if scenes.is_empty() {
+            return None;
+        }
+        Some(scenes)
     }
 
     // ------------ Get PAGEs...
