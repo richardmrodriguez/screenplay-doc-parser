@@ -77,12 +77,11 @@ mod tests {
     #[cfg(feature = "mupdf-basic-parsing")]
     #[test]
     fn test_mupdf_parsing() {
-        use std::thread::LocalKey;
 
         use mupdf_basic_parser;
 
         let custom_indentations = ElementIndentationsInches::us_letter_default()
-        .character(3.5)
+        .character(3.7)
         //.right(7.25)
         ;
         use crate::{
@@ -90,19 +89,25 @@ mod tests {
         };
         let screenplay_result = mupdf_basic_parser::get_screenplay_doc_from_filepath(
             //"test_data/DraftTest_02.pdf".into(),
-            "test_data/LocationsTest.pdf".into(),
+            "test_data/VCR2L.pdf".into(),
             Some(custom_indentations),
             None,
             None,
             None,
         );
-        let screenplay: ScreenplayDocument;
-        if screenplay_result.is_err() {
+        let Ok(screenplay) = screenplay_result else {
             println!("{:#?}", screenplay_result);
             panic!();
-        } else {
-            screenplay = screenplay_result.unwrap()
+
+        };
+
+        println!("PAGESLEN: {:?}", &screenplay.pages.len());
+        for page in &screenplay.pages {
+            println!("     PAGE: {:?} | LINES: {:?}", page.page_number, page.lines.len())
         }
+        
+
+
 
         let scenes_opt = screenplay.get_all_scenes_sorted();
         if let Some(scenes) = scenes_opt {
@@ -122,7 +127,7 @@ mod tests {
         for (id, location) in &screenplay.locations {
             if location.superlocation.is_none() {
                 println!("LOCATION_ID: {:?}, | LOCATION: {:}", id, location.string);
-                let Some(leafs) = screenplay.get_location_leafs(id.clone()) else {
+                let Some(leafs) = screenplay.get_location_leafs(id) else {
                     panic!();
                 };
                 for id in leafs {
@@ -140,7 +145,7 @@ mod tests {
             if location.sublocations.is_empty() {
 
                 println!("LOCATION_ID: {:?}, | LOCATION: {:}", id, location.string);
-                let Some(root) = screenplay.get_location_root(id.clone()) else {
+                let Some(root) = screenplay.get_location_root(id) else {
                     panic!();
                 };
                 let Some(root_node) = screenplay.get_location(&root) else {
@@ -155,16 +160,27 @@ mod tests {
         if screenplay.characters.is_empty() {
             println!("NO CHARACTERS FOUND!");
         }
-        for (id, character) in &screenplay.characters {
-            println!("CHARACTER ID: {:?} | CHARACTER: {:?}", id, character.name);
+        for character in &screenplay.characters {
+            println!("CHARACTER ID: {:?} | CHARACTER: {:?}", character.id, character.name);
+            let Some(lines) = screenplay.get_lines_of_dialogue_for_character(character) else {
+                //panic!();
+                continue;
+            };
+            println!("LINES OF DIALOGUE FOR CHARACTER: {:?}", lines.len());
+            
         }
         let print_pages: bool = false;
+
+        println!("PAGESLEN: {:?}", screenplay.pages.len());
+        for page in &screenplay.pages {
+            println!("     PAGE: {:?} | LINES: {:?}", page.page_number, page.lines.len())
+        }
 
         for page in screenplay.pages {
             if !print_pages {
                 break;
             }
-            println!("PAGE");
+            println!("PAGE: {:?}", page.page_number);
             for line in page.lines {
                 println!(
                     "-----LINE | Y: {:?} | TYPE: {:?} | REVISED: {} | NUM: {:?}",
@@ -349,7 +365,7 @@ mod tests {
                     if let Some(l_type) = el.element_type.clone() {
                         format!("{:?}", l_type)
                             .strip_prefix("SP_")
-                            .unwrap()
+                            .unwrap_or(&format!("{:?}", l_type))
                             .to_string()
                     } else {
                         format!("{:?}", SPType::NONE)

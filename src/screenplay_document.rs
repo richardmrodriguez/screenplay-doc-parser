@@ -7,6 +7,7 @@ use std::{
     hash::Hash,
     ops::{Deref, DerefMut},
     panic::Location,
+    thread::panicking,
     time::SystemTime,
 };
 use uuid::Uuid;
@@ -271,18 +272,52 @@ pub struct Character {
     pub name: String,
     pub id: CharacterID,
 }
+impl Character {
+    pub fn is_line(&self, line: &screenplay_document::Line) -> bool {
+        let mut maybe_character_name = String::new();
+        let mut previous_type: Option<SPType> = Some(SPType::NONE);
+        for text_element in &line.text_elements {
+            if previous_type != text_element.element_type {
+                if maybe_character_name == self.name {
+                    println!("'howdy y'all");
+                    return true;
+                }
+                maybe_character_name = String::new();
+            }
+            match text_element.element_type {
+                Some(SPType::SP_CHARACTER)
+                | Some(SPType::SP_DD_L_CHARACTER)
+                | Some(SPType::SP_DD_R_CHARACTER) => {
+                    if !maybe_character_name.is_empty() {
+                        maybe_character_name.push(' ');
+                    }
+                    maybe_character_name.push_str(&text_element.text.clone());
+                }
+                _ => {}
+            }
+            previous_type = text_element.element_type.clone();
+        }
+        if maybe_character_name == self.name {
+            //println!("HOO WEE!");
+            return  true;
+        }
+        
+
+        false
+    }
+}
 
 // -------------------- PAGE
 #[derive(Default, PartialEq, Clone, Debug, Eq, Hash)]
-pub struct PageNumID(pub Uuid);
-impl Deref for PageNumID {
+pub struct PageID(pub Uuid);
+impl Deref for PageID {
     type Target = Uuid;
     fn deref(&self) -> &Self::Target {
         &self.0
     }
 }
 
-impl DerefMut for PageNumID {
+impl DerefMut for PageID {
     fn deref_mut(&mut self) -> &mut Self::Target {
         &mut self.0
     }
@@ -501,8 +536,8 @@ pub struct ScreenplayDocument {
     pub revisions: Option<Vec<String>>, // current (and possible previous) revision date(s) from the title page
     pub scenes: HashMap<SceneID, Scene>,
     pub locations: HashMap<LocationID, LocationNode>,
-    pub characters: HashMap<CharacterID, Character>,
-    pub page_numbers: HashMap<PageNumID, PageNumber>,
+    pub characters: HashSet<Character>,
+    pub page_numbers: HashMap<PageID, PageNumber>,
 }
 impl ScreenplayDocument {
     pub fn new() -> Self {
@@ -511,9 +546,20 @@ impl ScreenplayDocument {
             revisions: None,
             scenes: HashMap::new(),
             locations: HashMap::new(),
-            characters: HashMap::new(),
+            characters: HashSet::new(),
             page_numbers: HashMap::new(),
         }
+    }
+
+    ///
+    /// Returns an Optional Vec of LocationIDs, up to and including this LocationID.
+    ///
+    pub fn get_full_location_path_for_node(
+        &self,
+        location: LocationID,
+    ) -> Option<(Vec<LocationID>)> {
+        unimplemented!();
+        None
     }
 
     // ------------ Get LOCATIONs...
@@ -524,11 +570,14 @@ impl ScreenplayDocument {
     /// Returns `None` if nothing matches the root of the path.
     ///
     /// Returns `Some((&LocationID, Vec<String>))` if a partial match is found.
+    /// The `&LocationID` is the last valid location the path matched.
+    /// The `Vec<String>` is the remaining subpath, which does not yet exist as `LocationNode`s.
+    ///
+    /// If the full path exists, the `Vec<String>` will be empty.
     ///
     /// The caller can afterwards handle creating the rest of the Location path,
     /// and appending a new LocationID to the sublocations field
     ///
-    /// TODO: Create a test script with SUBLOCATIONS!
     ///
     pub fn check_if_location_path_exists(
         &self,
@@ -591,29 +640,28 @@ impl ScreenplayDocument {
     // TODO: idk how to do this tree navigation shit without cloning IDs.......
     // there's most definitely a much better way to do this
     // maybe immutable reference counting?
-    pub fn get_location_root(&self, location_id: LocationID) -> Option<LocationID> {
+    pub fn get_location_root(&self, location_id: &LocationID) -> Option<LocationID> {
         let Some(location) = self.get_location(&location_id) else {
             return None;
         };
         let Some(superlocation) = &location.superlocation else {
             return Some(location_id.clone());
         };
-        return self.get_location_root(superlocation.clone());
+        return self.get_location_root(&superlocation.clone());
     }
 
-    pub fn get_location_leafs(&self, location_id: LocationID) -> Option<HashSet<LocationID>> {
+    pub fn get_location_leafs(&self, location_id: &LocationID) -> Option<HashSet<LocationID>> {
         let Some(location) = self.get_location(&location_id) else {
-            return  None;
+            return None;
         };
         if location.sublocations.is_empty() {
             let mut this_leaf_as_set: HashSet<LocationID> = HashSet::new();
-            this_leaf_as_set.insert(location_id);
+            this_leaf_as_set.insert(location_id.clone());
             return Some(this_leaf_as_set);
-
         }
         let mut location_id_set: HashSet<LocationID> = HashSet::new();
         for sublocation_id in &location.sublocations {
-            let Some(subset) = self.get_location_leafs(sublocation_id.clone()) else {
+            let Some(subset) = self.get_location_leafs(&sublocation_id.clone()) else {
                 continue;
             };
             location_id_set.extend(subset);
@@ -626,29 +674,75 @@ impl ScreenplayDocument {
 
     pub fn get_locations_with_character(&self, character_name: String) -> Option<Vec<&LocationID>> {
         unimplemented!();
+        let Some(ch_id) = self.get_character_id_from_name(&character_name) else {
+            return None;
+        };
+
         None
     }
 
-    pub fn get_locations_for_page(&self, page: PageNumID) -> Option<Vec<&LocationID>> {
+    pub fn get_locations_for_page(&self, page: PageID) -> Option<Vec<&LocationID>> {
         unimplemented!();
+        let scenes = self.get_scenes_on_page_by_page_id(&page)?;
+        let locations = scenes
+            .iter()
+            .map(|s| self.get_scene_from_id(s))
+            .filter(|scn| scn.is_some())
+            .map(|scn| scn.unwrap())
+            .map(|scn| scn.story_locations.clone())
+            //.collect()
+            ;
         None
     }
 
     // ------------ Get COORDINATEs...
-    pub fn get_start_end_coordinates_for_scene(
-        &self,
-        scene_id: &SceneID,
-    ) -> Option<(SceneHeadingElement, SceneHeadingElement)> {
-        None
-    }
 
     // ------------ Get LINE...
-    pub fn get_lines_for_character_speaking(
+    pub fn get_lines_of_dialogue_for_character(
         &self,
-        character: &CharacterID,
-    ) -> Option<Vec<&ScreenplayCoordinate>> {
-        None
+        character: &Character,
+    ) -> Option<Vec<&Line>> {
+
+        let mut lines: Vec<&Line> = Vec::new();
+
+        let mut is_dialogue = false;
+
+        for (_p_index, page) in self.pages.iter().enumerate() {
+            for (_l_index, line) in page.lines.iter().enumerate() {
+                if line.line_type != Some(SPType::SP_CHARACTER)
+                    && line.line_type != Some(SPType::SP_DUAL_CHARACTERS)
+                    && line.line_type != Some(SPType::SP_DIALOGUE)
+                    && line.line_type != Some(SPType::SP_DUAL_DIALOGUES)
+                {
+                    continue;
+                }
+                //println!("MIGHT BE CHARACTER OR DIALOGUE");
+                if character.is_line(line) {
+                    //println!("Oh boy!!!! | {:?} | {:?}", line.line_type, line.text_elements);
+                    is_dialogue = true;
+                    continue;
+                }
+                if !is_dialogue {
+                    continue;
+                }
+                match line.line_type {
+                    Some(SPType::SP_DIALOGUE) | Some(SPType::SP_DUAL_DIALOGUES) => {
+                        lines.push(line);
+                    }
+                    _ => {
+                        is_dialogue = false;
+                        continue;
+                    }
+                }
+            }
+        }
+        if lines.is_empty() {
+            return None;
+        }
+
+        Some(lines)
     }
+
     pub fn get_line_from_coordinate(
         &self,
         coordinate: &ScreenplayCoordinate,
@@ -664,18 +758,39 @@ impl ScreenplayDocument {
     }
 
     // ------------ Get CHARACTERS...
+
+    pub fn get_character_id_from_name(&self, name: &String) -> Option<&CharacterID> {
+        for ch in &self.characters {
+            if &ch.name == name {
+                return Some(&ch.id);
+            }
+        }
+        None
+    }
+
+    pub fn get_character_from_name(&self, name: &String) -> Option<&Character> {
+        for ch in &self.characters {
+            if &ch.name == name {
+                return Some(&ch);
+            }
+        }
+        None
+    }
+
+    pub fn get_character_from_id(&self, id: &CharacterID) -> Option<&Character> {
+        for ch in &self.characters {
+            if &ch.id == id {
+                return Some(&ch);
+            }
+        }
+        None
+    }
+
     pub fn get_characters_for_scene(&self, scene_id: &SceneID) -> Option<Vec<&CharacterID>> {
         None
     }
 
-    pub fn get_characters_for_page(&self, page_num_id: &PageNumID) -> Option<Vec<&Character>> {
-        None
-    }
-
-    pub fn get_characters_for_scene_heading_element(
-        &self,
-        scene_heading_element: &SceneHeadingElement,
-    ) -> Option<Vec<&Character>> {
+    pub fn get_characters_for_page(&self, page_num_id: &PageID) -> Option<Vec<&Character>> {
         None
     }
 
@@ -841,11 +956,6 @@ impl ScreenplayDocument {
         Some(scenes)
     }
 
-    /*
-    pub fn get_scenes_with_element(&self, element: &TextElement) -> Option<Vec<&SceneID>> {
-        None
-    }
-    */
     pub fn get_scenes_with_scene_heading_element(
         &self,
         heading_element: &screenplay_document::SceneHeadingElement,
@@ -909,7 +1019,7 @@ impl ScreenplayDocument {
         unimplemented!();
         None
     }
-    pub fn get_scenes_on_page_by_page_num_id(&self, id: &PageNumID) -> Option<Vec<&SceneID>> {
+    pub fn get_scenes_on_page_by_page_id(&self, id: &PageID) -> Option<Vec<&SceneID>> {
         unimplemented!();
         None
     }
@@ -928,25 +1038,88 @@ impl ScreenplayDocument {
     }
 
     // ------------ Get PAGEs...
-    pub fn get_pages_for_scene(&self, scene_id: &SceneID) -> Option<Vec<&PageNumID>> {
+    pub fn get_pages_for_scene(&self, scene_id: &SceneID) -> Option<Vec<usize>> {
+        let checked_scene = self.get_scene_from_id(scene_id)?;
+
+        let scenes_ordered = self.get_all_scenes_sorted()?;
+        //pages.push(checked_scene.start.page.clone());
+
+        for this_id in scenes_ordered {
+            let Some(scene_obj) = self.get_scene_from_id(this_id) else {
+                continue; // ERROR -- Tried to find a scene by ID that DOESN'T EXIST in the current script
+            };
+            if scene_obj.start.page > checked_scene.start.page
+                || (scene_obj.start.page == checked_scene.start.page
+                    && scene_obj.start.line > checked_scene.start.line)
+            {
+                let pages: Vec<usize> =
+                    (checked_scene.start.page.clone()..=scene_obj.start.page.clone()).collect();
+                return Some(pages);
+            }
+        }
+
         None
     }
 
-    pub fn get_pages_for_character(&self, character_id: &CharacterID) -> Option<Vec<&PageNumID>> {
-        None
-    }
+    pub fn get_pages_for_character(&self, character_id: &CharacterID) -> Option<Vec<&PageNumber>> {
+        unimplemented!();
+        //let Some(checked_character) = self.characters.get(character_id) else {
+        //    return None;
+        //};
+        let mut pages: Vec<&PageNumber> = Vec::new();
+        for page in &self.pages {
+            let character_lines: Vec<&Line> = page
+                .lines
+                .iter()
+                .filter(|line| match line.line_type {
+                    Some(SPType::SP_CHARACTER) | Some(SPType::SP_DUAL_CHARACTERS) => true,
+                    _ => false,
+                })
+                .collect();
+            if character_lines.is_empty() {
+                continue;
+            }
+            for line in character_lines {
+                let matched_elements: Vec<&TextElement> = line
+                    .text_elements
+                    .iter()
+                    .filter(|te| match te.element_type {
+                        Some(SPType::SP_CHARACTER)
+                        | Some(SPType::SP_DD_L_CHARACTER)
+                        | Some(SPType::SP_DD_R_CHARACTER) => true,
+                        _ => false,
+                    })
+                    .collect();
+                let mut current_character_name: String = String::new();
+                let mut last_type: Option<SPType> = None;
+                let mut matches_character_name = false;
+                for element in matched_elements {
+                    if element.element_type != last_type {
+                        last_type = element.element_type.clone();
+                        //if current_character_name == checked_character.name {
+                        //    matches_character_name = true;
+                        //    break;
+                        //}
+                        current_character_name = String::new();
+                    }
+                    if !current_character_name.is_empty() {
+                        current_character_name.push(' ');
+                    }
+                    current_character_name.push_str(&element.text.clone());
+                }
+                if matches_character_name {
+                    if let Some(pagenumber) = &page.page_number {
+                        pages.push(pagenumber);
+                    } else {
+                        // TODO: Add missing page numbers and/or PageIDs during parsing.
+                        // Title Page is "0", first content page is "1"
+                        //
+                        panic!("Each page should be assigned a page number and a page ID.")
+                    }
+                }
+            }
+        }
 
-    pub fn get_pages_for_scene_heading_element(
-        &self,
-        scene_heading_element: &SceneHeadingElement,
-    ) -> Option<Vec<&PageNumID>> {
-        None
-    }
-
-    pub fn get_page_from_screenplay_coordinate(
-        &self,
-        screenplay_coordinate: &ScreenplayCoordinate,
-    ) -> Option<&Page> {
         None
     }
 }

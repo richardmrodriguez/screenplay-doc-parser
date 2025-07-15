@@ -9,6 +9,7 @@ use std::hash::Hash;
 use std::ops::Not;
 use std::process::id;
 use std::sync::RwLockReadGuard;
+use std::thread::panicking;
 
 use uuid::Uuid;
 
@@ -383,7 +384,7 @@ pub fn get_screenplay_doc_from_pdf_obj(
             element_indentaions_pts =
                 ElementIndentationsPoints::us_letter_default(&Some(current_resolution));
         }
-        for pdf_line in pdf_page.lines.iter() {
+        for (pdf_l_idx, pdf_line) in pdf_page.lines.iter().enumerate() {
             if pdf_line.words.len() < 1 {
                 continue;
             };
@@ -588,26 +589,24 @@ pub fn get_screenplay_doc_from_pdf_obj(
                             character_name.push_str(&element.text);
                         }
                     }
-                    if character_name.is_empty() {
-                        break;
-                    }
+                    //panic!();
+                    
+                    let mut character_exists_in_doc = false;
                     if !&new_screenplay_doc.characters.is_empty() {
-                        let mut character_exists_in_doc = false;
-                        for (_, character) in &new_screenplay_doc.characters {
+                        for character in &new_screenplay_doc.characters {
                             if character.name == character_name {
                                 character_exists_in_doc = true;
                             }
                         }
-                        if character_exists_in_doc {
-                            break;
-                        }
                     }
-                    let new_id = screenplay_document::CharacterID::new();
-                    let new_character = Character {
-                        name: character_name,
-                        id: new_id.clone(),
-                    };
-                    new_screenplay_doc.characters.insert(new_id, new_character);
+                    if !character_exists_in_doc{
+                        
+                        let new_character = Character {
+                            name: character_name,
+                            id: screenplay_document::CharacterID::new(),
+                        };
+                        new_screenplay_doc.characters.insert(new_character);
+                    }
                 }
                 // SCENE / LOCATION PARSING
                 Some(SPType::SP_SCENE_HEADING(SceneHeadingElement::Line)) => {
@@ -639,8 +638,7 @@ pub fn get_screenplay_doc_from_pdf_obj(
                     for element in &new_line.text_elements {
                         match element.element_type {
                             Some(SPType::SP_SCENE_HEADING(SceneHeadingElement::Location))
-                            | Some(SPType::SP_SCENE_HEADING(SceneHeadingElement::Environment)) 
-                            => {
+                            | Some(SPType::SP_SCENE_HEADING(SceneHeadingElement::Environment)) => {
                                 if !root_location_string.is_empty() {
                                     root_location_string.push(' ');
                                 }
@@ -695,8 +693,6 @@ pub fn get_screenplay_doc_from_pdf_obj(
                         new_screenplay_doc
                             .locations
                             .insert(location_id_to_insert.clone().unwrap(), new_root_location);
-
-
                     }
 
                     // Subpath parsing and insertion
@@ -704,7 +700,6 @@ pub fn get_screenplay_doc_from_pdf_obj(
                     if let Some((id, s_path)) =
                         new_screenplay_doc.check_if_location_path_exists(&full_path)
                     {
-                        
                         let mut current_id = id.clone();
 
                         for pathstring in s_path {
@@ -789,7 +784,6 @@ pub fn get_screenplay_doc_from_pdf_obj(
                     {
                         te.element_type = Some(SPType::SP_SCENENUM);
                         println!("{:?}", te.element_type);
-                        //panic!("this is joey");
                     }
                 }
             } else {
@@ -833,6 +827,7 @@ pub fn get_screenplay_doc_from_pdf_obj(
         if new_page.lines.is_empty() {
             continue;
         }
+
         new_screenplay_doc.pages.push(new_page);
     }
 
