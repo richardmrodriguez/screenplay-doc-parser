@@ -77,7 +77,6 @@ mod tests {
     #[cfg(feature = "mupdf-basic-parsing")]
     #[test]
     fn test_mupdf_parsing() {
-
         use mupdf_basic_parser;
 
         let custom_indentations = ElementIndentationsInches::us_letter_default()
@@ -98,16 +97,12 @@ mod tests {
         let Ok(screenplay) = screenplay_result else {
             println!("{:#?}", screenplay_result);
             panic!();
-
         };
 
-        println!("PAGESLEN: {:?}", &screenplay.pages.len());
-        for page in &screenplay.pages {
-            println!("     PAGE: {:?} | LINES: {:?}", page.page_number, page.lines.len())
-        }
-        
-
-
+        //println!("PAGESLEN: {:?}", &screenplay.pages.len());
+        //for page in &screenplay.pages {
+        //    println!("     PAGE: {:?} | LINES: {:?}", page.page_number, page.lines.len())
+        //}
 
         let scenes_opt = screenplay.get_all_scenes_sorted();
         if let Some(scenes) = scenes_opt {
@@ -122,38 +117,39 @@ mod tests {
             println!("LOCATION_ID: {:?}, | LOCATION: {:}", id, location.string);
         }
 
-        println!("-----------LOCATION_HEIRARCHY----------");
+        println!("\n-----------LOCATION_HEIRARCHY----------");
 
         for (id, location) in &screenplay.locations {
             if location.superlocation.is_none() {
-                println!("LOCATION_ID: {:?}, | LOCATION: {:}", id, location.string);
+                println!("\nLOCATION_ID: {:?}, | LOCATION: {:}", id, location.string);
                 let Some(leafs) = screenplay.get_location_leafs(id) else {
                     panic!();
                 };
+                println!("------- LEAFS FOR ROOT");
                 for id in leafs {
                     let Some(leaf) = screenplay.get_location(&id) else {
                         continue;
                     };
-                    println!(" ------ LEAF FOR ROOT: {:?} | {:?}", id, leaf.string);
-
+                    println!(" ------- : | {:?}", leaf.string);
                 }
             }
         }
 
-
-       for (id, location) in &screenplay.locations {
+        for (id, location) in &screenplay.locations {
             if location.sublocations.is_empty() {
-
-                println!("LOCATION_ID: {:?}, | LOCATION: {:}", id, location.string);
+                println!("LOCATION: {:}", location.string);
                 let Some(root) = screenplay.get_location_root(id) else {
                     panic!();
                 };
                 let Some(root_node) = screenplay.get_location(&root) else {
                     panic!()
                 };
-                println!("--------- ROOT FOR LEAF: {:?}, | {:?}", root, root_node.string )
+                println!(
+                    "--------- ROOT FOR LEAF: {:?}, | {:?}",
+                    root, root_node.string
+                )
             }
-       }
+        }
 
         println!("\n-----\n");
 
@@ -161,20 +157,38 @@ mod tests {
             println!("NO CHARACTERS FOUND!");
         }
         for character in &screenplay.characters {
-            println!("CHARACTER ID: {:?} | CHARACTER: {:?}", character.id, character.name);
+            println!(
+                "CHARACTER ID: {:?} | CHARACTER: {:?}",
+                character.id, character.name
+            );
             let Some(lines) = screenplay.get_lines_of_dialogue_for_character(character) else {
                 //panic!();
                 continue;
             };
             println!("LINES OF DIALOGUE FOR CHARACTER: {:?}", lines.len());
-            
+            let mut wordcount: usize = 0;
+            for line in lines {
+                let mut line_str = String::new();
+                wordcount += line.text_elements.len();
+                //println!("WORDS FOR LINE: {:}", line.text_elements.len());
+                line.text_elements
+                    .iter()
+                    .map(|te| te.text.clone())
+                    .for_each(|ts| {
+                        if !line_str.is_empty() {
+                            line_str.push(' ');
+                        }
+                        line_str.push_str(&ts)});
+                //println!("{}",line_str);
+            }
+            println!("WORDS FOR CHARACTER: {:}", wordcount);
         }
         let print_pages: bool = false;
 
-        println!("PAGESLEN: {:?}", screenplay.pages.len());
-        for page in &screenplay.pages {
-            println!("     PAGE: {:?} | LINES: {:?}", page.page_number, page.lines.len())
-        }
+        //println!("PAGESLEN: {:?}", screenplay.pages.len());
+        //for page in &screenplay.pages {
+        //    println!("     PAGE: {:?} | LINES: {:?}", page.page_number, page.lines.len())
+        //}
 
         for page in screenplay.pages {
             if !print_pages {

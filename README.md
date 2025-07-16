@@ -27,6 +27,7 @@ This categorizes the following Screenplay Element Types:
 
 - Action
 - Character Cue
+    - Also Character Extensions (i.e. the `(V.O.)` in `CHARACTER (V.O.)`)
 - Dialogue
 - Parenthetical
 - Scene Headings (including Heading Elements)
@@ -39,11 +40,15 @@ This parser also captures the following screenplay elements as metadata
 - Scene Number (alphanumeric)
 - Page Number (alphanumeric)
 
+### Types that rely on matching arbitrary strings
+
 Some types, such as `TimeOfDay`, `Revision Markers`, and `Environment` rely on arbitrary string values. You can pass in your own collection of these strings, to parse a screenplay written in a different language, or support additional / specific elements.
 
 For example, you can add "DUSK" or "HIGH NOON" as `TimeOfDay` strings, so that they are correctly identified as `TimeOfDay` elements
 
-Additionally, the `ElementIndentations` can be passed in, to provide custom indentations and support parsing a screenplay formatted in A4, or a screenplay formatted "centered" like from Fade In or other programs.
+### Indentations
+
+Additionally, the `ElementIndentations` struct can be passed in to the PDF parser, to provide custom indentations and support parsing a screenplay formatted in A4, or a screenplay formatted with "centered" (as in placement, not justification) sctipts, like from Fade In or other programs.
 
 ## TODO
 
@@ -54,9 +59,10 @@ These are currently not parsed or handled properly yet:
 - Transitions ("CUT TO:", "FADE IN:", etc; any element like that which is right-aligned.)
 - A4 detection (no default ElementIndentation values for A4 yet)
 
+# DEPENDENCIES
+
+This parser has an optional feature, which uses the `mupdf-basic-text-extractor` crate to allow PDF file reading. You may choose to exclude this feature and roll your own PDF file-parsing, and then handle the conversion to the generic `pdf_document::PDFDocument' object, which gets passed into the PDF parser. 
 
 # LICENSE
 
-This code is licensed under AGPL-3.0. This is primarily because of the `mupdf` dependency, for the optional `mupdf-basic-parsing` feature.
-
-If you choose to exclude that feature, this code is *still licensed* under AGPL-3.0.
+This code is licensed under AGPL-3.0.
