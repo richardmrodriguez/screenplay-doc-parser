@@ -107,7 +107,19 @@ mod tests {
         let scenes_opt = screenplay.get_all_scenes_sorted();
         if let Some(scenes) = scenes_opt {
             for scn in scenes {
-                println!("SCENE: {:?}", scn);
+                let Some(scene_obj) = screenplay.get_scene_from_id(scn) else {
+                    continue;
+                };
+                let Some(leaf_location) = &scene_obj.story_locations.last() else {
+                    continue;
+                };
+                let Some(scene_loc) = screenplay.locations.get(&leaf_location) else {
+                    continue;
+                };
+                println!(
+                    "SCENE: {:?} | LOCATION: {:?}",
+                    scene_obj.start, scene_loc.string
+                );
             }
             println!("");
         }
@@ -167,7 +179,7 @@ mod tests {
             };
             println!("LINES OF DIALOGUE FOR CHARACTER: {:?}", lines.len());
             let mut wordcount: usize = 0;
-            for line in lines {
+            for (coord, line) in lines {
                 let mut line_str = String::new();
                 wordcount += line.text_elements.len();
                 //println!("WORDS FOR LINE: {:}", line.text_elements.len());
@@ -178,11 +190,108 @@ mod tests {
                         if !line_str.is_empty() {
                             line_str.push(' ');
                         }
-                        line_str.push_str(&ts)});
+                        line_str.push_str(&ts)
+                    });
                 //println!("{}",line_str);
             }
             println!("WORDS FOR CHARACTER: {:}", wordcount);
         }
+
+        for character in &screenplay.characters {
+            let Some(scenes_with_char_speaking) =
+                screenplay.get_scenes_with_character_speaking(&character)
+            else {
+                continue;
+            };
+            println!("CHARACTER: {:?}", character.name);
+            println!("ALL SCENES WITH CHARACTER SPEAKING:");
+            for scn in &scenes_with_char_speaking {
+                let Some(scene_obj) = screenplay.get_scene_from_id(scn) else {
+                    continue;
+                };
+                let Some(location) =
+                    screenplay.get_location(scene_obj.story_locations.last().unwrap())
+                else {
+                    continue;
+                };
+                print!("------");
+                println!("{:?} | {:?}", scene_obj.start, location.string)
+            }
+        }
+
+        println!("\nFILTERED CHARACTER DIALOGUE LINES:");
+        for (location_id, location) in &screenplay.locations {
+            println!("LOCATION: {:?}", location.string);
+            for character in &screenplay.characters {
+                println!("-- CHARACTER: {:?}", character.name);
+                let Some(lines) = screenplay.get_lines_of_dialogue_for_character(character) else {
+                    continue;
+                };
+                let Some(scenes_with_char_speaking) =
+                    screenplay.get_scenes_with_character_speaking(&character)
+                else {
+                    continue;
+                };
+
+                let Some(filtered_scenes) = screenplay
+                    .filter_scenes_by_locations(scenes_with_char_speaking, vec![location_id])
+                else {
+                    //panic!("FUCK COCK");
+                    continue;
+                };
+                //println!("----- FILTERED SCENES:");
+                for scn in &filtered_scenes {
+                    let Some(sceneobj) = screenplay.get_scene_from_id(scn) else {
+                        continue;
+                    };
+                    let Some(scene_line) = screenplay.get_line_from_coordinate(&sceneobj.start)
+                    else {
+                        continue;
+                    };
+                    //println!(
+                    //    "----- {:?} | {:?}",
+                    //    sceneobj.start,
+                    //    scene_line
+                    //        .text_elements
+                    //        .iter()
+                    //        .map(|te| te.text.clone())
+                    //        .collect::<Vec<String>>()
+                    //);
+                    //print!("----- {:?}| ", sceneobj.start)
+                }
+                println!("");
+
+                if filtered_scenes.len() == screenplay.scenes.len() {
+                    panic!("NO SCENES ACTUALLY FILTERED!");
+                }
+                let Some(filtered_lines) =
+                    screenplay.filter_lines_by_scene(&lines, filtered_scenes)
+                else {
+                    panic!();
+                    continue;
+                };
+
+                println!("----- LINES OF DIALOGUE FOR CHARACTER: {:?}", filtered_lines.len());
+                let mut wordcount: usize = 0;
+                for (coord, f_line) in filtered_lines {
+                    let mut line_str = String::new();
+                    wordcount += f_line.text_elements.len();
+                    //println!("WORDS FOR LINE: {:}", line.text_elements.len());
+                    f_line.text_elements
+                        .iter()
+                        .map(|te| te.text.clone())
+                        .for_each(|ts| {
+                            if !line_str.is_empty() {
+                                line_str.push(' ');
+                            }
+                            line_str.push_str(&ts)
+                        });
+                    //println!("{}",line_str);
+                }
+                println!("----- WORDS FOR CHARACTER: {:}", wordcount);
+            }
+        }
+
         let print_pages: bool = false;
 
         //println!("PAGESLEN: {:?}", screenplay.pages.len());

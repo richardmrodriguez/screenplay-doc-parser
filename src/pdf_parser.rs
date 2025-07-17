@@ -714,6 +714,7 @@ pub fn get_screenplay_doc_from_pdf_obj(
                                     superlocation: Some(current_id.clone()),
                                 };
                                 current_id = new_id.clone();
+                                location_id_to_insert = Some(new_id.clone());
                                 location.add_sublocation(new_id.clone());
                                 new_screenplay_doc
                                     .locations
@@ -733,13 +734,7 @@ pub fn get_screenplay_doc_from_pdf_obj(
                         },
                         environment: new_line_env,
                         start: ScreenplayCoordinate {
-                            page: new_screenplay_doc.pages.len() + {
-                                if new_screenplay_doc.pages.len() > 0 {
-                                    1
-                                } else {
-                                    0
-                                }
-                            },
+                            page: new_screenplay_doc.pages.len(),
                             line: new_page.lines.len(),
                             element: None,
                         },
@@ -770,8 +765,9 @@ pub fn get_screenplay_doc_from_pdf_obj(
                             }
                         },
                     };
-
-                    new_screenplay_doc.scenes.insert(SceneID::new(), new_scene);
+                    let new_scene_id = SceneID::new();
+                    new_line.scene_id = Some(new_scene_id.clone());
+                    new_screenplay_doc.scenes.insert(new_scene_id, new_scene);
                 }
                 _ => {}
             }
