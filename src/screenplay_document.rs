@@ -851,7 +851,7 @@ impl ScreenplayDocument {
             };
 
             for scene in scenes_for_loc {
-                println!("----- FILTERING BY LOCATION-SCENE....");
+                //println!("----- FILTERING BY LOCATION-SCENE....");
                 if scene_ids.contains(&scene) && !filtered.contains(&scene) {
                     filtered.push(scene);
                 }

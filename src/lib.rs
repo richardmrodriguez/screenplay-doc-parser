@@ -221,9 +221,11 @@ mod tests {
 
         println!("\nFILTERED CHARACTER DIALOGUE LINES:");
         for (location_id, location) in &screenplay.locations {
-            println!("LOCATION: {:?}", location.string);
+            println!("\nLOCATION: {:?}", location.string);
             for character in &screenplay.characters {
-                println!("-- CHARACTER: {:?}", character.name);
+                use crate::screenplay_document::ScreenplayCoordinate;
+
+                println!("\n-- CHARACTER: {:?}", character.name);
                 let Some(lines) = screenplay.get_lines_of_dialogue_for_character(character) else {
                     continue;
                 };
@@ -236,10 +238,9 @@ mod tests {
                 let Some(filtered_scenes) = screenplay
                     .filter_scenes_by_locations(scenes_with_char_speaking, vec![location_id])
                 else {
-                    //panic!("FUCK COCK");
+                    println!("----- NO LINES -----");
                     continue;
                 };
-                //println!("----- FILTERED SCENES:");
                 for scn in &filtered_scenes {
                     let Some(sceneobj) = screenplay.get_scene_from_id(scn) else {
                         continue;
@@ -248,36 +249,29 @@ mod tests {
                     else {
                         continue;
                     };
-                    //println!(
-                    //    "----- {:?} | {:?}",
-                    //    sceneobj.start,
-                    //    scene_line
-                    //        .text_elements
-                    //        .iter()
-                    //        .map(|te| te.text.clone())
-                    //        .collect::<Vec<String>>()
-                    //);
-                    //print!("----- {:?}| ", sceneobj.start)
                 }
-                println!("");
 
                 if filtered_scenes.len() == screenplay.scenes.len() {
                     panic!("NO SCENES ACTUALLY FILTERED!");
                 }
-                let Some(filtered_lines) =
+                let Some(mut filtered_lines) =
                     screenplay.filter_lines_by_scene(&lines, filtered_scenes)
                 else {
-                    panic!();
-                    continue;
+                    continue; // all lines should categorically be part of SOME scene... unless there's ZERO "proper" scene headings...
                 };
 
-                println!("----- LINES OF DIALOGUE FOR CHARACTER: {:?}", filtered_lines.len());
                 let mut wordcount: usize = 0;
-                for (coord, f_line) in filtered_lines {
+                let mut sorted_line_coords = filtered_lines
+                    .keys()
+                    .collect::<Vec<&ScreenplayCoordinate>>();
+                sorted_line_coords.sort_by(|a, b| (a.page, a.line).cmp(&(b.page, b.line)));
+                for coord in sorted_line_coords {
                     let mut line_str = String::new();
+                    let f_line = filtered_lines[coord];
                     wordcount += f_line.text_elements.len();
                     //println!("WORDS FOR LINE: {:}", line.text_elements.len());
-                    f_line.text_elements
+                    f_line
+                        .text_elements
                         .iter()
                         .map(|te| te.text.clone())
                         .for_each(|ts| {
@@ -286,9 +280,13 @@ mod tests {
                             }
                             line_str.push_str(&ts)
                         });
-                    //println!("{}",line_str);
+                    println!("----- {}", line_str);
                 }
-                println!("----- WORDS FOR CHARACTER: {:}", wordcount);
+                print!(
+                    "----- LINES OF DIALOGUE FOR CHARACTER: {:?} | ",
+                    filtered_lines.len()
+                );
+                println!("WORDS FOR CHARACTER: {:}", wordcount);
             }
         }
 
