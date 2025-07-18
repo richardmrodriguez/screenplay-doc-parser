@@ -551,6 +551,9 @@ impl ScreenplayDocument {
         }
     }
 
+    // ------------ Get LOCATIONs...
+    // TODO: All Get LOCATION funcs should return some kind of Vec of Tuples that includes at least (&LocationID, &Location)
+    
     ///
     /// Returns an Optional Vec of LocationIDs, up to and including this LocationID.
     ///
@@ -561,8 +564,6 @@ impl ScreenplayDocument {
         unimplemented!();
         None
     }
-
-    // ------------ Get LOCATIONs...
 
     ///
     /// Determines if a "location path" exists.
@@ -637,31 +638,29 @@ impl ScreenplayDocument {
         Some(loc_id_vec)
     }
 
-    // TODO: idk how to do this tree navigation shit without cloning IDs.......
-    // there's most definitely a much better way to do this
-    // maybe immutable reference counting?
-    pub fn get_location_root(&self, location_id: &LocationID) -> Option<LocationID> {
+    // !--------- TODO: redo these location getters to use a lifetime to return a ref, instead of using cloning
+    pub fn get_location_root<'a>(&'a self, location_id: &'a LocationID) -> Option<&'a LocationID> {
         let Some(location) = self.get_location(&location_id) else {
             return None;
         };
         let Some(superlocation) = &location.superlocation else {
-            return Some(location_id.clone());
+            return Some(location_id);
         };
-        return self.get_location_root(&superlocation.clone());
+        return self.get_location_root(&superlocation);
     }
 
-    pub fn get_location_leafs(&self, location_id: &LocationID) -> Option<HashSet<LocationID>> {
+    pub fn get_location_leafs<'a>(&'a self, location_id: &'a LocationID) -> Option<HashSet<&'a LocationID>> {
         let Some(location) = self.get_location(&location_id) else {
             return None;
         };
         if location.sublocations.is_empty() {
-            let mut this_leaf_as_set: HashSet<LocationID> = HashSet::new();
-            this_leaf_as_set.insert(location_id.clone());
+            let mut this_leaf_as_set: HashSet<&LocationID> = HashSet::new();
+            this_leaf_as_set.insert(location_id);
             return Some(this_leaf_as_set);
         }
-        let mut location_id_set: HashSet<LocationID> = HashSet::new();
+        let mut location_id_set: HashSet<&LocationID> = HashSet::new();
         for sublocation_id in &location.sublocations {
-            let Some(subset) = self.get_location_leafs(&sublocation_id.clone()) else {
+            let Some(subset) = self.get_location_leafs(&sublocation_id) else {
                 continue;
             };
             location_id_set.extend(subset);
@@ -698,6 +697,7 @@ impl ScreenplayDocument {
     // ------------ Get COORDINATEs...
 
     // ------------ Get LINEs...
+    // TODO: All Get LINE funcs should return a tuple (&Line, ScreenplayCoordinate)
 
     pub fn filter_lines_by_scene<'a>(
         &self,
@@ -714,11 +714,10 @@ impl ScreenplayDocument {
             .iter()
             .filter(|(coord, ln)| {
                 let Some(scene_id) = self.get_scene_id_for_screenplay_coordinate(&coord) else {
-                    
                     return false;
                 };
-                if scenes_filter.contains(&scene_id)  {
-                    return  true;
+                if scenes_filter.contains(&scene_id) {
+                    return true;
                 }
                 false
             })
@@ -735,7 +734,7 @@ impl ScreenplayDocument {
         Some(scn_filtered)
     }
 
-    pub fn get_lines_of_dialogue_for_character(
+    pub fn get_all_lines_of_dialogue_for_character(
         &self,
         character: &Character,
     ) -> Option<HashMap<ScreenplayCoordinate, &Line>> {
@@ -837,6 +836,7 @@ impl ScreenplayDocument {
     }
 
     // ------------ Get SCENES...
+    // TODO: All Get SCENE funcs should return a tuple (&SceneID, &Scene, ScreenplayCoordinate)
 
     pub fn filter_scenes_by_locations(
         &self,
@@ -918,9 +918,9 @@ impl ScreenplayDocument {
 
     pub fn get_scene_id_for_screenplay_coordinate(
         &self,
-        screenplay_coordinate: &ScreenplayCoordinate,
+        checked_coordinate: &ScreenplayCoordinate,
     ) -> Option<&SceneID> {
-        let Some(page) = self.pages.get(screenplay_coordinate.page) else {
+        let Some(page) = self.pages.get(checked_coordinate.page) else {
             println!("DUCK SAUCE 2: HELP!");
             return None;
         };
@@ -928,37 +928,24 @@ impl ScreenplayDocument {
         // lines are properly enumerated FORWARDS, then ENTIRE ITERATOR is reversed
         for (line_index, line) in page.lines.iter().enumerate().rev() {
             // if this line is EQUAL or EARLIER THAN the coordinate...
-            if line_index <= screenplay_coordinate.line {
-                if let Some(SPType::SP_SCENE_HEADING(SceneHeadingElement::Line)) = line.line_type {
-                    //print!("SUCCESS --- ");
-                    // for te in &line.text_elements {
-                    //     print!("{:?} ", te.text);
-                    // }
-                    //print!("| ");
-                    //println!(
-                    //    "COORD_LINE_IDX: {:?} | LINE INDEX: {:?} | PAGE_LINES_LEN: {:?}",
-                    //    screenplay_coordinate.line,
-                    //    line_index,
-                    //    page.lines.len()
-                    //);
-                    let Some(scn_id) = &line.scene_id else {
-                        //println!("{:?}", &line.scene_id);
-                        //println!("SCENE HEADING HAS NO SCENE ID!");
-                        //println!("CHECKING...");
-                        
-                        println!("SCENE HEADING HAS NO SCENE ID!");
-                        panic!();
-                        continue;
-                    };
-                    //println!("SUCCESS PART ONE...?");
-                    return Some(scn_id);
-                }
+            if line_index > checked_coordinate.line {
+                continue;
             }
+            let Some(SPType::SP_SCENE_HEADING(SceneHeadingElement::Line)) = line.line_type else {
+                continue;
+            };
+            let Some(scn_id) = &line.scene_id else {
+                println!("SCENE HEADING HAS NO SCENE ID!");
+                panic!();
+                continue;
+            };
+            //println!("SUCCESS PART ONE...?");
+            return Some(scn_id);
         }
         // couldn't find the scene on this page. try the previous page...
         // recursively check all previous pages
 
-        let Some(previous_page_idx) = screenplay_coordinate.page.checked_sub(1) else {
+        let Some(previous_page_idx) = checked_coordinate.page.checked_sub(1) else {
             return None;
         };
         let Some(previous_page) = self.pages.get(previous_page_idx) else {
@@ -974,7 +961,7 @@ impl ScreenplayDocument {
         };
         //println!("CHECKING RECURSIVELY FOR SCENE!");
         //println!("COORDS OF PREVIOUS_PAGE: {:?}", last_page_last_line_coord);
-        
+
         let Some(id_opt) = self.get_scene_id_for_screenplay_coordinate(&last_page_last_line_coord)
         else {
             //println!("RECURSIVE CHECK FAILED!");
@@ -985,14 +972,13 @@ impl ScreenplayDocument {
         return Some(id_opt);
     }
 
+    // ---?---------?
     pub fn get_scene_ids_from_range(
         &self,
         start: &ScreenplayCoordinate,
         end: &ScreenplayCoordinate,
     ) -> Option<Vec<&SceneID>> {
         if (self.pages.get(start.page)).is_none() {
-            println!("{:?}", start);
-            panic!();
             return None;
         }
         if self.pages.get(end.page).is_none() {
@@ -1089,7 +1075,10 @@ impl ScreenplayDocument {
 
     pub fn get_all_scenes_on_page(&self, page_index: usize) -> Option<Vec<&SceneID>> {
         let page = self.pages.get(page_index)?;
-        let last_line_idx = page.lines.len().checked_sub(1)?;
+        if page.lines.is_empty() {
+            return None;
+        }
+        let last_line_idx = page.lines.len().checked_sub(1).unwrap_or(0);
         let start = ScreenplayCoordinate {
             page: page_index,
             line: 0,
@@ -1105,12 +1094,16 @@ impl ScreenplayDocument {
         Some(scenes)
     }
 
+    // this one seems horribly inefficient....
     pub fn get_scenes_with_character_speaking(
         &self,
         character: &Character,
     ) -> Option<Vec<&SceneID>> {
         let mut scenes_vec: Vec<&SceneID> = Vec::new();
 
+        //for (scn_idx, (scn_id, scn)) in self.scenes.iter().enumerate() {
+
+        //}
         for (p_idx, page) in self.pages.iter().enumerate() {
             for (l_idx, line) in page.lines.iter().enumerate() {
                 if character.is_line(&line) {
@@ -1134,73 +1127,7 @@ impl ScreenplayDocument {
             return Some(scenes_vec);
         }
 
-        let Some(scene_ids_in_order) = self.get_all_scenes_sorted() else {
-            return None;
-        };
-        let mut scenes_with_char_speaking: Vec<&SceneID> = Vec::new();
-        let Some(lines_of_dialogue_for_character) =
-            self.get_lines_of_dialogue_for_character(character)
-        else {
-            return None;
-        };
-
-        let scenes_in_order: Vec<&Scene> = scene_ids_in_order
-            .iter()
-            .filter_map(|id| self.get_scene_from_id(id))
-            .collect();
-
-        let mut scenes_map: HashMap<&SceneID, &Scene> = HashMap::new();
-        if scene_ids_in_order.len() != scenes_in_order.len() {
-            return None;
-        }
-        for (counter, scene_id) in scene_ids_in_order.iter().enumerate() {
-            scenes_map.insert(*scene_id, scenes_in_order[counter]);
-        }
-
-        let mut current_scene_id: &SceneID = scene_ids_in_order[0];
-        let mut current_scene_coordinate: &ScreenplayCoordinate = &ScreenplayCoordinate {
-            page: 0,
-            line: 0,
-            element: None,
-        };
-
-        'lines: for (coord, line) in &lines_of_dialogue_for_character {
-            if coord.page < current_scene_coordinate.page {
-                continue;
-            }
-            if coord.line < current_scene_coordinate.line {
-                continue;
-            }
-
-            'scenes: for (rev_idx, scene_id) in scene_ids_in_order.iter().rev().enumerate() {
-                if scenes_map[scene_id].start.page > coord.page
-                    && scenes_map[scene_id].start.line > coord.line
-                {
-                    //scene starts AFTER this line...
-                    continue;
-                }
-                if *scene_id == current_scene_id {
-                    break 'scenes;
-                }
-                // Scene is the first scene that starts BEFORE this line...
-                scenes_with_char_speaking.push(scene_id);
-                current_scene_id = scene_id;
-
-                let current_forward_idx = scene_ids_in_order.len() - 1 - rev_idx;
-                if let Some(next_scene) = scene_ids_in_order.get(current_forward_idx + 1) {
-                    current_scene_coordinate = &scenes_map[scene_id].start;
-                    break 'scenes;
-                }
-                // if there isn't a next scene, we are done
-                break 'lines;
-            }
-        }
-        if scenes_with_char_speaking.is_empty() {
-            return None;
-        }
-        //panic!();
-
-        Some(scenes_with_char_speaking)
+        
     }
 
     pub fn get_scenes_on_page_by_nominal_number(
@@ -1225,13 +1152,14 @@ impl ScreenplayDocument {
         if scenes.is_empty() {
             let location_opt = self.get_location(&location);
             println!("LOCATION: {:?}", location_opt);
-            panic!("COULDN'T FIND SCENES FOR LOCATION!");
+            //panic!("COULDN'T FIND SCENES FOR LOCATION!");
             return None;
         }
         Some(scenes)
     }
 
     // ------------ Get PAGEs...
+    // TODO: all get PAGE funcs should return a Vec of tuples (usize, &Page)
     pub fn get_pages_for_scene(&self, scene_id: &SceneID) -> Option<Vec<usize>> {
         let checked_scene = self.get_scene_from_id(scene_id)?;
 
@@ -1255,6 +1183,13 @@ impl ScreenplayDocument {
         None
     }
 
+
+    pub fn get_pages_for_location(&self, location: &Location) -> Option<Vec<(usize, &Page)>> {
+        unimplemented!();
+        None
+    }
+
+    // ... this func may not be necessary, or is otherwise way too gross and like idek
     pub fn get_pages_for_character(&self, character_id: &CharacterID) -> Option<Vec<&PageNumber>> {
         unimplemented!();
         //let Some(checked_character) = self.characters.get(character_id) else {

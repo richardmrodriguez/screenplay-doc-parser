@@ -77,6 +77,9 @@ mod tests {
     #[cfg(feature = "mupdf-basic-parsing")]
     #[test]
     fn test_mupdf_parsing() {
+        let start = Instant::now();
+        use std::time::Instant;
+
         use mupdf_basic_parser;
 
         let custom_indentations = ElementIndentationsInches::us_letter_default()
@@ -173,10 +176,13 @@ mod tests {
                 "CHARACTER ID: {:?} | CHARACTER: {:?}",
                 character.id, character.name
             );
-            let Some(lines) = screenplay.get_lines_of_dialogue_for_character(character) else {
+            let get_all_char_lines_start = Instant::now();
+            let Some(lines) = screenplay.get_all_lines_of_dialogue_for_character(character) else {
                 //panic!();
                 continue;
             };
+            let get_all_char_liens_end = get_all_char_lines_start.elapsed();
+            println!("TIME TAKEN TO GET ALL DIALOGUE FOR THIS CHARACTER: {:?}", get_all_char_liens_end);
             println!("LINES OF DIALOGUE FOR CHARACTER: {:?}", lines.len());
             let mut wordcount: usize = 0;
             for (coord, line) in lines {
@@ -198,13 +204,18 @@ mod tests {
         }
 
         for character in &screenplay.characters {
+            let get_scenes_with_char_bench_start = Instant::now();
             let Some(scenes_with_char_speaking) =
                 screenplay.get_scenes_with_character_speaking(&character)
             else {
                 continue;
             };
+            let get_scenes_with_char_bench_end = get_scenes_with_char_bench_start.elapsed();
+
+            
             println!("CHARACTER: {:?}", character.name);
-            println!("ALL SCENES WITH CHARACTER SPEAKING:");
+            println!("\n--TIME TAKEN TO GET ALL SCENES WITH THIS CHARACTER: {:?}\n", get_scenes_with_char_bench_end);
+            println!("--ALL SCENES WITH CHARACTER SPEAKING:");
             for scn in &scenes_with_char_speaking {
                 let Some(scene_obj) = screenplay.get_scene_from_id(scn) else {
                     continue;
@@ -226,7 +237,7 @@ mod tests {
                 use crate::screenplay_document::ScreenplayCoordinate;
 
                 println!("\n-- CHARACTER: {:?}", character.name);
-                let Some(lines) = screenplay.get_lines_of_dialogue_for_character(character) else {
+                let Some(lines) = screenplay.get_all_lines_of_dialogue_for_character(character) else {
                     continue;
                 };
                 let Some(scenes_with_char_speaking) =
@@ -234,7 +245,7 @@ mod tests {
                 else {
                     continue;
                 };
-
+                let filter_benchmark_start = Instant::now();
                 let Some(filtered_scenes) = screenplay
                     .filter_scenes_by_locations(scenes_with_char_speaking, vec![location_id])
                 else {
@@ -260,6 +271,9 @@ mod tests {
                     continue; // all lines should categorically be part of SOME scene... unless there's ZERO "proper" scene headings...
                 };
 
+                let filter_bench_end = filter_benchmark_start.elapsed();
+                println!("TIME TAKEN TO FILTER DIALOGUE FOR THIS LOCATION: {:?}", filter_bench_end);
+
                 let mut wordcount: usize = 0;
                 let mut sorted_line_coords = filtered_lines
                     .keys()
@@ -280,7 +294,7 @@ mod tests {
                             }
                             line_str.push_str(&ts)
                         });
-                    println!("----- {}", line_str);
+                    println!("----- {:<40} | PAGE: {:>4} | LINE: {:>4}", line_str, &coord.page, &coord.line);
                 }
                 print!(
                     "----- LINES OF DIALOGUE FOR CHARACTER: {:?} | ",
@@ -331,6 +345,7 @@ mod tests {
                 println!("\n");
             }
         }
+        println!("\nTime elapsed: {:?}", start.elapsed());
     }
 
     #[test]
