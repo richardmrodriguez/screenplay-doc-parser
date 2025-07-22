@@ -1,8 +1,8 @@
 use std::fmt::Error;
 
 pub mod pdf_document;
-pub mod screenplay_document;
 pub mod reports;
+pub mod screenplay_document;
 
 pub mod pdf_parser;
 
@@ -79,9 +79,9 @@ mod tests {
     #[test]
     fn test_mupdf_parsing() {
         let start = Instant::now();
-        use std::time::Instant;
-
+        use crate::reports;
         use mupdf_basic_parser;
+        use std::time::Instant;
 
         let custom_indentations = ElementIndentationsInches::us_letter_default();
         use crate::{
@@ -105,7 +105,7 @@ mod tests {
         //    println!("     PAGE: {:?} | LINES: {:?}", page.page_number, page.lines.len())
         //}
 
-        let scenes_opt = screenplay.get_all_scenes_ordered();
+        let scenes_opt = reports::get_all_scenes_ordered(&screenplay);
         if let Some(scenes) = scenes_opt {
             for scn in scenes {
                 let Some(scene_obj) = screenplay.scenes.get(scn) else {
@@ -137,7 +137,7 @@ mod tests {
         for (id, location) in &screenplay.locations {
             if location.superlocation.is_none() {
                 println!("\nLOCATION_ID: {:?}, | LOCATION: {:}", id, location.string);
-                let Some(leafs) = screenplay.get_all_location_leafs(id) else {
+                let Some(leafs) = reports::get_all_location_leafs(&screenplay, id) else {
                     panic!();
                 };
                 println!("------- LEAFS FOR ROOT");
@@ -153,7 +153,7 @@ mod tests {
         for (id, location) in &screenplay.locations {
             if location.sublocations.is_empty() {
                 println!("LOCATION: {:}", location.string);
-                let Some(root) = screenplay.get_location_root_for_node(id) else {
+                let Some(root) = reports::get_location_root_for_node(&screenplay, id) else {
                     panic!();
                 };
                 let Some(root_node) = screenplay.locations.get(&root) else {
@@ -177,11 +177,11 @@ mod tests {
         println!("\n - GET CHARACTERS FOR LOCATION:");
 
         for (l_id, location) in &screenplay.locations {
-            let Some(ordered_scenes) = screenplay.get_all_scenes_ordered() else {
+            let Some(ordered_scenes) = reports::get_all_scenes_ordered(&screenplay) else {
                 continue;
             };
             let Some(filtered_scenes) =
-                screenplay.filter_scenes_by_locations(ordered_scenes, vec![l_id])
+                reports::filter_scenes_by_locations(&screenplay, ordered_scenes, vec![l_id])
             else {
                 continue;
             };
@@ -190,8 +190,11 @@ mod tests {
                 let Some(scene) = screenplay.scenes.get(sid) else {
                     continue;
                 };
-                println!("--- SCENE COORDINATE: {:?}, {:?}", scene.start.page, scene.start.line);
-                let Some(characters) = screenplay.get_characters_for_scene(sid) else {
+                println!(
+                    "--- SCENE COORDINATE: {:?}, {:?}",
+                    scene.start.page, scene.start.line
+                );
+                let Some(characters) = reports::get_characters_for_scene(&screenplay, sid) else {
                     println!("----- NO Characters speaking in this scene!");
                     continue;
                 };
@@ -203,18 +206,16 @@ mod tests {
             }
         }
 
-
         println!("\n - GET CHARACTERS PER PAGE:");
         for (pidx, page) in screenplay.pages.iter().enumerate() {
             println!("PAGE INDEX: {:?} | NOMINAL PAGE NUMBER: {:?}", pidx, {
                 if let Some(pn) = &page.page_number {
                     pn.to_string()
                 } else {
-
                     "_".to_string()
                 }
             });
-            let Some(characters) = screenplay.get_characters_for_page(pidx) else  {
+            let Some(characters) = reports::get_characters_for_page(&screenplay, pidx) else {
                 println!("No Characters on this page!");
                 continue;
             };
@@ -234,7 +235,7 @@ mod tests {
                 character.id, character.name
             );
             let get_all_char_lines_start = Instant::now();
-            let Some(lines) = screenplay.get_all_lines_of_dialogue_for_character(character) else {
+            let Some(lines) = reports::get_all_lines_of_dialogue_for_character(&screenplay,character) else {
                 //panic!();
                 continue;
             };
@@ -267,7 +268,7 @@ mod tests {
         for character in &screenplay.characters {
             let get_scenes_with_char_bench_start = Instant::now();
             let Some(scenes_with_char_speaking) =
-                screenplay.get_scenes_with_character_speaking(&character)
+                reports::get_scenes_with_character_speaking(&screenplay,&character)
             else {
                 continue;
             };
@@ -297,7 +298,7 @@ mod tests {
         // Test GET PAGES
         println!("\n - GET PAGES FOR LOCATION:");
         for (l_id, location) in &screenplay.locations {
-            let Some(pages) = screenplay.get_pages_for_location(&l_id) else {
+            let Some(pages) = reports::get_pages_for_location(&screenplay, &l_id) else {
                 continue;
             };
             println!("--- LOCATION: {:?}", location.string);
@@ -309,7 +310,7 @@ mod tests {
         println!("\n - GET PAGES FOR CHARACTER:");
         for character in &screenplay.characters {
             println!("--- CHARACTER: {:?}", character.name);
-            let Some(pages) = screenplay.get_pages_for_character(character) else {
+            let Some(pages) = reports::get_pages_for_character(&screenplay, character) else {
                 //panic!();
                 continue;
             };
@@ -332,19 +333,22 @@ mod tests {
                 use crate::screenplay_document::ScreenplayCoordinate;
 
                 println!("\n-- CHARACTER: {:?}", character.name);
-                let Some(lines) = screenplay.get_all_lines_of_dialogue_for_character(character)
+                let Some(lines) =
+                    reports::get_all_lines_of_dialogue_for_character(&screenplay, character)
                 else {
                     continue;
                 };
                 let Some(scenes_with_char_speaking) =
-                    screenplay.get_scenes_with_character_speaking(&character)
+                    reports::get_scenes_with_character_speaking(&screenplay, &character)
                 else {
                     continue;
                 };
                 let filter_benchmark_start = Instant::now();
-                let Some(filtered_scenes) = screenplay
-                    .filter_scenes_by_locations(scenes_with_char_speaking, vec![location_id])
-                else {
+                let Some(filtered_scenes) = reports::filter_scenes_by_locations(
+                    &screenplay,
+                    scenes_with_char_speaking,
+                    vec![location_id],
+                ) else {
                     println!("----- NO LINES -----");
                     continue;
                 };
@@ -352,7 +356,7 @@ mod tests {
                     let Some(sceneobj) = screenplay.scenes.get(scn) else {
                         continue;
                     };
-                    let Some(scene_line) = screenplay.get_line_from_coordinate(&sceneobj.start)
+                    let Some(scene_line) = reports::get_line_from_coordinate(&screenplay,&sceneobj.start)
                     else {
                         continue;
                     };
@@ -362,7 +366,7 @@ mod tests {
                     panic!("NO SCENES ACTUALLY FILTERED!");
                 }
                 let Some(mut filtered_lines) =
-                    screenplay.filter_lines_by_scene(&lines, filtered_scenes)
+                    reports::filter_lines_by_scene(&screenplay,&lines, filtered_scenes)
                 else {
                     continue; // all lines should categorically be part of SOME scene... unless there's ZERO "proper" scene headings...
                 };

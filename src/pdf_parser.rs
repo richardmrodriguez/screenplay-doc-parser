@@ -698,13 +698,14 @@ pub fn get_screenplay_doc_from_pdf_obj(
                     // Subpath parsing and insertion
 
                     if let Some((id, s_path)) =
-                        new_screenplay_doc.location_path_exists(&full_path)
+                        crate::reports::location_path_exists(&new_screenplay_doc, &full_path)
+                        
                     {
                         let mut current_id = id.clone();
 
                         for pathstring in s_path {
                             if let Some(location) =
-                                &mut new_screenplay_doc.get_location_mutable(&current_id)
+                                &mut new_screenplay_doc.locations.get_mut(&current_id)
                             {
                                 let new_id = LocationID::new();
 
