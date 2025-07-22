@@ -82,10 +82,7 @@ mod tests {
 
         use mupdf_basic_parser;
 
-        let custom_indentations = ElementIndentationsInches::us_letter_default()
-        .character(3.7)
-        //.right(7.25)
-        ;
+        let custom_indentations = ElementIndentationsInches::us_letter_default();
         use crate::{
             pdf_document::ElementIndentationsInches, screenplay_document::ScreenplayDocument,
         };
@@ -107,10 +104,10 @@ mod tests {
         //    println!("     PAGE: {:?} | LINES: {:?}", page.page_number, page.lines.len())
         //}
 
-        let scenes_opt = screenplay.get_all_scenes_sorted();
+        let scenes_opt = screenplay.get_all_scenes_ordered();
         if let Some(scenes) = scenes_opt {
             for scn in scenes {
-                let Some(scene_obj) = screenplay.get_scene_from_id(scn) else {
+                let Some(scene_obj) = screenplay.scenes.get(scn) else {
                     continue;
                 };
                 let Some(leaf_location) = &scene_obj.story_locations.last() else {
@@ -127,6 +124,8 @@ mod tests {
             println!("");
         }
 
+        // Test Get LOCATIONS...
+
         println!("ALL LOCATIONS:");
         for (id, location) in &screenplay.locations {
             println!("LOCATION_ID: {:?}, | LOCATION: {:}", id, location.string);
@@ -137,12 +136,12 @@ mod tests {
         for (id, location) in &screenplay.locations {
             if location.superlocation.is_none() {
                 println!("\nLOCATION_ID: {:?}, | LOCATION: {:}", id, location.string);
-                let Some(leafs) = screenplay.get_location_leafs(id) else {
+                let Some(leafs) = screenplay.get_all_location_leafs(id) else {
                     panic!();
                 };
                 println!("------- LEAFS FOR ROOT");
                 for id in leafs {
-                    let Some(leaf) = screenplay.get_location(&id) else {
+                    let Some(leaf) = screenplay.locations.get(id) else {
                         continue;
                     };
                     println!(" ------- : | {:?}", leaf.string);
@@ -153,10 +152,10 @@ mod tests {
         for (id, location) in &screenplay.locations {
             if location.sublocations.is_empty() {
                 println!("LOCATION: {:}", location.string);
-                let Some(root) = screenplay.get_location_root(id) else {
+                let Some(root) = screenplay.get_location_root_for_node(id) else {
                     panic!();
                 };
-                let Some(root_node) = screenplay.get_location(&root) else {
+                let Some(root_node) = screenplay.locations.get(&root) else {
                     panic!()
                 };
                 println!(
@@ -171,6 +170,63 @@ mod tests {
         if screenplay.characters.is_empty() {
             println!("NO CHARACTERS FOUND!");
         }
+
+        // Test GET CHARACTER...
+
+        println!("\n - GET CHARACTERS FOR LOCATION:");
+
+        for (l_id, location) in &screenplay.locations {
+            let Some(ordered_scenes) = screenplay.get_all_scenes_ordered() else {
+                continue;
+            };
+            let Some(filtered_scenes) =
+                screenplay.filter_scenes_by_locations(ordered_scenes, vec![l_id])
+            else {
+                continue;
+            };
+            println!("LOCATION: {:?}", location.string);
+            for sid in &filtered_scenes {
+                let Some(scene) = screenplay.scenes.get(sid) else {
+                    continue;
+                };
+                println!("--- SCENE COORDINATE: {:?}, {:?}", scene.start.page, scene.start.line);
+                let Some(characters) = screenplay.get_characters_for_scene(sid) else {
+                    println!("----- NO Characters speaking in this scene!");
+                    continue;
+                };
+                for character in characters {
+                    print!("----");
+                    print!("- {:?} ", character.name);
+                }
+                println!("");
+            }
+        }
+
+
+        println!("\n - GET CHARACTERS PER PAGE:");
+        for (pidx, page) in screenplay.pages.iter().enumerate() {
+            println!("PAGE INDEX: {:?} | NOMINAL PAGE NUMBER: {:?}", pidx, {
+                if let Some(pn) = &page.page_number {
+                    pn.to_string()
+                } else {
+
+                    "_".to_string()
+                }
+            });
+            let Some(characters) = screenplay.get_characters_for_page(pidx) else  {
+                println!("No Characters on this page!");
+                continue;
+            };
+            print!("----- ");
+            for character in characters {
+                print!("{:?} | ", character.name);
+            }
+            println!("");
+        }
+
+        println!("\n\n");
+
+        // Test ALL LINES OF DIALOGUE per Character
         for character in &screenplay.characters {
             println!(
                 "CHARACTER ID: {:?} | CHARACTER: {:?}",
@@ -182,7 +238,10 @@ mod tests {
                 continue;
             };
             let get_all_char_liens_end = get_all_char_lines_start.elapsed();
-            println!("TIME TAKEN TO GET ALL DIALOGUE FOR THIS CHARACTER: {:?}", get_all_char_liens_end);
+            println!(
+                "TIME TAKEN TO GET ALL DIALOGUE FOR THIS CHARACTER: {:?}",
+                get_all_char_liens_end
+            );
             println!("LINES OF DIALOGUE FOR CHARACTER: {:?}", lines.len());
             let mut wordcount: usize = 0;
             for (coord, line) in lines {
@@ -203,6 +262,7 @@ mod tests {
             println!("WORDS FOR CHARACTER: {:}", wordcount);
         }
 
+        // Test Get SCENES per Character
         for character in &screenplay.characters {
             let get_scenes_with_char_bench_start = Instant::now();
             let Some(scenes_with_char_speaking) =
@@ -212,16 +272,19 @@ mod tests {
             };
             let get_scenes_with_char_bench_end = get_scenes_with_char_bench_start.elapsed();
 
-            
             println!("CHARACTER: {:?}", character.name);
-            println!("\n--TIME TAKEN TO GET ALL SCENES WITH THIS CHARACTER: {:?}\n", get_scenes_with_char_bench_end);
+            println!(
+                "\n--TIME TAKEN TO GET ALL SCENES WITH THIS CHARACTER: {:?}\n",
+                get_scenes_with_char_bench_end
+            );
             println!("--ALL SCENES WITH CHARACTER SPEAKING:");
             for scn in &scenes_with_char_speaking {
-                let Some(scene_obj) = screenplay.get_scene_from_id(scn) else {
+                let Some(scene_obj) = screenplay.scenes.get(scn) else {
                     continue;
                 };
-                let Some(location) =
-                    screenplay.get_location(scene_obj.story_locations.last().unwrap())
+                let Some(location) = screenplay
+                    .locations
+                    .get(scene_obj.story_locations.last().unwrap())
                 else {
                     continue;
                 };
@@ -230,14 +293,46 @@ mod tests {
             }
         }
 
+        // Test GET PAGES
+        println!("\n - GET PAGES FOR LOCATION:");
+        for (l_id, location) in &screenplay.locations {
+            let Some(pages) = screenplay.get_pages_for_location(&l_id) else {
+                continue;
+            };
+            println!("--- LOCATION: {:?}", location.string);
+            for (pidx, _page) in pages {
+                println!("----- {:?}", pidx);
+            }
+        }
+
+        println!("\n - GET PAGES FOR CHARACTER:");
+        for character in &screenplay.characters {
+            println!("--- CHARACTER: {:?}", character.name);
+            let Some(pages) = screenplay.get_pages_for_character(character) else {
+                //panic!();
+                continue;
+            };
+            for (pidx, _page) in pages {
+                println!("----- {:?}", pidx)
+            }
+        }
+
+        // print filtered dialogue...
+
+        let print_filtered_dialogue = false;
+
         println!("\nFILTERED CHARACTER DIALOGUE LINES:");
         for (location_id, location) in &screenplay.locations {
+            if !print_filtered_dialogue {
+                break;
+            }
             println!("\nLOCATION: {:?}", location.string);
             for character in &screenplay.characters {
                 use crate::screenplay_document::ScreenplayCoordinate;
 
                 println!("\n-- CHARACTER: {:?}", character.name);
-                let Some(lines) = screenplay.get_all_lines_of_dialogue_for_character(character) else {
+                let Some(lines) = screenplay.get_all_lines_of_dialogue_for_character(character)
+                else {
                     continue;
                 };
                 let Some(scenes_with_char_speaking) =
@@ -253,7 +348,7 @@ mod tests {
                     continue;
                 };
                 for scn in &filtered_scenes {
-                    let Some(sceneobj) = screenplay.get_scene_from_id(scn) else {
+                    let Some(sceneobj) = screenplay.scenes.get(scn) else {
                         continue;
                     };
                     let Some(scene_line) = screenplay.get_line_from_coordinate(&sceneobj.start)
@@ -272,7 +367,10 @@ mod tests {
                 };
 
                 let filter_bench_end = filter_benchmark_start.elapsed();
-                println!("TIME TAKEN TO FILTER DIALOGUE FOR THIS LOCATION: {:?}", filter_bench_end);
+                println!(
+                    "TIME TAKEN TO FILTER DIALOGUE FOR THIS LOCATION: {:?}",
+                    filter_bench_end
+                );
 
                 let mut wordcount: usize = 0;
                 let mut sorted_line_coords = filtered_lines
@@ -294,7 +392,10 @@ mod tests {
                             }
                             line_str.push_str(&ts)
                         });
-                    println!("----- {:<40} | PAGE: {:>4} | LINE: {:>4}", line_str, &coord.page, &coord.line);
+                    println!(
+                        "----- {:<40} | PAGE: {:>4} | LINE: {:>4}",
+                        line_str, &coord.page, &coord.line
+                    );
                 }
                 print!(
                     "----- LINES OF DIALOGUE FOR CHARACTER: {:?} | ",

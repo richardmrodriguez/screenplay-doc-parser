@@ -698,7 +698,7 @@ pub fn get_screenplay_doc_from_pdf_obj(
                     // Subpath parsing and insertion
 
                     if let Some((id, s_path)) =
-                        new_screenplay_doc.check_if_location_path_exists(&full_path)
+                        new_screenplay_doc.location_path_exists(&full_path)
                     {
                         let mut current_id = id.clone();
 

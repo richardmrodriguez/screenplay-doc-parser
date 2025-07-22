@@ -1,15 +1,12 @@
-use crate::{pdf_document, screenplay_document};
+use crate::{pdf_document, };
 use core::panic;
-use serde::de::IntoDeserializer;
 use std::{
-    collections::{HashMap, HashSet, btree_map::Keys},
-    default,
+    collections::{HashMap, HashSet,},
+    
     hash::Hash,
-    ops::{Deref, DerefMut, Index},
-    panic::Location,
-    path::Component,
-    thread::panicking,
-    time::SystemTime,
+    ops::{Deref, DerefMut, },
+    time::{Instant, },
+    vec,
 };
 use uuid::Uuid;
 
@@ -22,9 +19,7 @@ pub enum TimeOfDay {
     Afternoon(String),
     Extras(Option<HashMap<String, String>>),
 }
-impl TimeOfDay {
-    fn get(&self) {}
-}
+
 
 #[derive(PartialEq, Clone, Debug)]
 pub struct TimeOfDayCollection {
@@ -135,11 +130,6 @@ pub enum PageFormat {
     A4,
     OTHER,
 }
-
-// FIXME: TODO: Collapse the SPTypes, so that
-// LINE TYPE variants take in specialized SUBTYPE enum variants
-// I.E. each SCENE_HEADING TextElement will take in a SluglineElement as data
-// each
 
 /// # SPType
 ///
@@ -274,7 +264,7 @@ pub struct Character {
     pub id: CharacterID,
 }
 impl Character {
-    pub fn is_line(&self, line: &screenplay_document::Line) -> bool {
+    pub fn is_line(&self, line: &Line) -> bool {
         let mut maybe_character_name = String::new();
         let mut previous_type: Option<SPType> = Some(SPType::NONE);
         for text_element in &line.text_elements {
@@ -325,6 +315,17 @@ impl DerefMut for PageID {
 
 #[derive(Default, PartialEq, Clone, Debug)]
 pub struct PageNumber(pub String);
+impl Deref for PageNumber {
+    type Target = String;
+    fn deref(&self) -> &Self::Target {
+        &self.0
+    }
+}
+impl DerefMut for PageNumber {
+    fn deref_mut(&mut self) -> &mut Self::Target {
+        &mut self.0
+    }
+}
 
 // -------------------- SCENE
 #[derive(Default, PartialEq, Clone, Debug)]
@@ -461,12 +462,12 @@ impl LocationNode {
     /// let mut screenplay_doc = screenplay_document::ScreenplayDocument::new();
     /// ```
     ///
-    pub fn check_if_subpath_exists(
-        &self,
-        this_location_id: &LocationID,
+    pub fn subpath_exists<'a>(
+        &'a self,
+        this_location_id: &'a LocationID,
         subpath: &[String],
-        screenplay: &screenplay_document::ScreenplayDocument,
-    ) -> Option<(LocationID, Vec<String>)> {
+        screenplay: &'a ScreenplayDocument,
+    ) -> Option<(&'a LocationID, Vec<String>)> {
         if subpath.is_empty() {
             return None;
         }
@@ -474,21 +475,21 @@ impl LocationNode {
         let subpath_root = &subpath[0];
 
         for id in &self.sublocations {
-            let Some(sublocation) = screenplay.get_location(&id) else {
+            let Some(sublocation) = screenplay.locations.get(id) else {
                 continue;
             };
             if sublocation.string == *subpath_root {
                 if subpath.len() == 1 {
-                    return Some((id.clone(), Vec::new()));
+                    return Some((id, Vec::new()));
                 }
                 if subpath.len() > 1 && sublocation.sublocations.is_empty() {
-                    return Some((id.clone(), Vec::from(&subpath[1..])));
+                    return Some((id, Vec::from(&subpath[1..])));
                 }
-                return sublocation.check_if_subpath_exists(id, &subpath[1..], &screenplay);
+                return sublocation.subpath_exists(id, &subpath[1..], screenplay);
             }
         }
 
-        Some((this_location_id.clone(), subpath.to_vec()))
+        Some((this_location_id, subpath.to_vec()))
     }
 }
 
@@ -553,14 +554,22 @@ impl ScreenplayDocument {
 
     // ------------ Get LOCATIONs...
     // TODO: All Get LOCATION funcs should return some kind of Vec of Tuples that includes at least (&LocationID, &Location)
-    
+
     ///
     /// Returns an Optional Vec of LocationIDs, up to and including this LocationID.
     ///
     pub fn get_full_location_path_for_node(
         &self,
-        location: LocationID,
-    ) -> Option<(Vec<LocationID>)> {
+        location: &LocationID,
+    ) -> Option<(Vec<&LocationID>)> {
+        unimplemented!();
+        None
+    }
+
+    pub fn get_full_string_for_location_path(
+        &self,
+        location_leaf_node: &LocationID,
+    ) -> Option<String> {
         unimplemented!();
         None
     }
@@ -580,10 +589,10 @@ impl ScreenplayDocument {
     /// and appending a new LocationID to the sublocations field
     ///
     ///
-    pub fn check_if_location_path_exists(
-        &self,
+    pub fn location_path_exists<'a>(
+        &'a self,
         path: &[String],
-    ) -> Option<(LocationID, Vec<String>)> {
+    ) -> Option<(&'a LocationID, Vec<String>)> {
         if path.is_empty() {
             return None;
         }
@@ -593,27 +602,19 @@ impl ScreenplayDocument {
         for (id, location) in &self.locations {
             if location.string == *path_root {
                 if path.len() == 1 {
-                    return Some((id.clone(), Vec::new()));
+                    return Some((id, Vec::new()));
                 }
                 if path.len() > 1 && location.sublocations.is_empty() {
-                    return Some((id.clone(), Vec::from(&path[1..])));
+                    return Some((id, Vec::from(&path[1..])));
                 }
 
-                return location.check_if_subpath_exists(id, &path[1..], &self);
+                return location.subpath_exists(&id, &path[1..], &self);
             }
         }
 
         None
     }
 
-    pub fn get_location(&self, id: &LocationID) -> Option<&LocationNode> {
-        for (existing_id, loc) in &self.locations {
-            if existing_id == id {
-                return Some(loc);
-            }
-        }
-        None
-    }
     pub fn get_location_mutable(&mut self, id: &LocationID) -> Option<&mut LocationNode> {
         for (existing_id, loc) in &mut self.locations {
             if existing_id == id {
@@ -639,18 +640,27 @@ impl ScreenplayDocument {
     }
 
     // !--------- TODO: redo these location getters to use a lifetime to return a ref, instead of using cloning
-    pub fn get_location_root<'a>(&'a self, location_id: &'a LocationID) -> Option<&'a LocationID> {
-        let Some(location) = self.get_location(&location_id) else {
-            return None;
-        };
+
+    ///
+    /// Gets the Location ID of the root in this location path, from a given LocationID.
+    ///
+    /// Returns `'None` if the LocationID is invalid.
+    pub fn get_location_root_for_node<'a>(
+        &'a self,
+        location_id: &'a LocationID,
+    ) -> Option<&'a LocationID> {
+        let location = self.locations.get(location_id)?;
         let Some(superlocation) = &location.superlocation else {
             return Some(location_id);
         };
-        return self.get_location_root(&superlocation);
+        return self.get_location_root_for_node(&superlocation);
     }
 
-    pub fn get_location_leafs<'a>(&'a self, location_id: &'a LocationID) -> Option<HashSet<&'a LocationID>> {
-        let Some(location) = self.get_location(&location_id) else {
+    pub fn get_all_location_leafs<'a>(
+        &'a self,
+        location_id: &'a LocationID,
+    ) -> Option<HashSet<&'a LocationID>> {
+        let Some(location) = self.locations.get(location_id) else {
             return None;
         };
         if location.sublocations.is_empty() {
@@ -660,7 +670,7 @@ impl ScreenplayDocument {
         }
         let mut location_id_set: HashSet<&LocationID> = HashSet::new();
         for sublocation_id in &location.sublocations {
-            let Some(subset) = self.get_location_leafs(&sublocation_id) else {
+            let Some(subset) = self.get_all_location_leafs(&sublocation_id) else {
                 continue;
             };
             location_id_set.extend(subset);
@@ -671,26 +681,54 @@ impl ScreenplayDocument {
         Some(location_id_set)
     }
 
-    pub fn get_locations_with_character(&self, character_name: String) -> Option<Vec<&LocationID>> {
-        unimplemented!();
-        let Some(ch_id) = self.get_character_id_from_name(&character_name) else {
-            return None;
-        };
+    pub fn get_locations_with_character_speaking(
+        &self,
+        character: &Character,
+    ) -> Option<Vec<&LocationID>> {
+        let scenes = self.get_scenes_with_character_speaking(character)?;
+        let mut locations: HashSet<&LocationID> = HashSet::new();
 
-        None
+        scenes
+            .iter()
+            .filter_map(|s| self.scenes.get(s))
+            .map(|scn| &scn.story_locations)
+            .for_each(|lcv| {
+                lcv.iter().for_each(|lc| {
+                    locations.insert(lc);
+                });
+            });
+        if locations.is_empty() {
+            return None;
+        }
+
+        Some(locations.iter().copied().collect())
     }
 
-    pub fn get_locations_for_page(&self, page: PageID) -> Option<Vec<&LocationID>> {
-        unimplemented!();
-        let scenes = self.get_scenes_on_page_by_page_id(&page)?;
-        let locations = scenes
+    pub fn get_locations_on_page_by_idx(&self, page: usize) -> Option<Vec<&LocationID>> {
+        let mut locations: HashSet<&LocationID> = HashSet::new();
+        let scenes = self.get_scenes_on_page_by_idx(page)?;
+        scenes
             .iter()
-            .map(|s| self.get_scene_from_id(s))
-            .filter(|scn| scn.is_some())
-            .map(|scn| scn.unwrap())
-            .map(|scn| scn.story_locations.clone())
-            //.collect()
-            ;
+            .filter_map(|s| {
+                let Some(scene) = self.scenes.get(s) else {
+                    return None;
+                };
+
+                if scene.story_locations.is_empty() {
+                    return None;
+                }
+
+                Some(&scene.story_locations)
+            })
+            .for_each(|s| {
+                s.iter().for_each(|l| {
+                    locations.insert(l);
+                })
+            });
+
+        if locations.is_empty() {
+            return Some(locations.iter().copied().collect());
+        }
         None
     }
 
@@ -699,6 +737,8 @@ impl ScreenplayDocument {
     // ------------ Get LINEs...
     // TODO: All Get LINE funcs should return a tuple (&Line, ScreenplayCoordinate)
 
+    // This takes 100 ish microseconds to filter for a single scene, for a script < 20 pages...
+    // this might be a candidate for optimization in the future...
     pub fn filter_lines_by_scene<'a>(
         &self,
         lines: &HashMap<ScreenplayCoordinate, &'a Line>,
@@ -708,6 +748,7 @@ impl ScreenplayDocument {
             //panic!("EMPTY FILTER!");
             return None;
         }
+        let bench_time_test = Instant::now();
         let mut scn_filtered: HashMap<ScreenplayCoordinate, &Line> = HashMap::new();
 
         lines
@@ -731,6 +772,8 @@ impl ScreenplayDocument {
         if scn_filtered.len() == lines.len() {
             //panic!("DIDN'T FILTER ANY LINES AT ALL!!!");
         }
+        let bench_res = bench_time_test.elapsed();
+        println!("\nDURATION TO FILTER BY SCENES: {:?}", bench_res);
         Some(scn_filtered)
     }
 
@@ -787,52 +830,106 @@ impl ScreenplayDocument {
     pub fn get_line_from_coordinate(
         &self,
         coordinate: &ScreenplayCoordinate,
-    ) -> Option<&screenplay_document::Line> {
-        let Some(page) = self.pages.get(coordinate.page) else {
-            return None;
-        };
-        let Some(line) = page.lines.get(coordinate.line) else {
-            return None;
-        };
-
-        Some(line)
+    ) -> Option<&Line> {
+        let page = self.pages.get(coordinate.page)?;
+        page.lines.get(coordinate.line)
     }
 
     // ------------ Get CHARACTERS...
 
-    pub fn get_character_id_from_name(&self, name: &String) -> Option<&CharacterID> {
-        for ch in &self.characters {
-            if &ch.name == name {
-                return Some(&ch.id);
+    pub fn get_characters_for_scene(&self, scene_id: &SceneID) -> Option<Vec<&Character>> {
+        let scn = self.scenes.get(scene_id)?;
+        let mut current_page = scn.start.page;
+        let mut characters_in_scene: HashSet<&Character> = HashSet::new();
+        let current_characters = &self.characters;
+
+        'seeking: loop {
+            let Some(page) = self.pages.get(current_page) else {
+                break 'seeking;
+            };
+            'lines: for (l_idx, line) in page.lines.iter().enumerate() {
+                if (current_page, l_idx) < (scn.start.page, scn.start.line) {
+                    continue 'lines;
+                }
+                if line.line_type == Some(SPType::SP_SCENE_HEADING(SceneHeadingElement::Line)) {
+                    if (current_page, l_idx) > (scn.start.page, scn.start.line) {
+                        break 'seeking;
+                    }
+                }
+                if line.line_type != Some(SPType::SP_CHARACTER) {
+                    continue 'lines;
+                }
+                if characters_in_scene.len() == current_characters.len() {
+                    break 'seeking;
+                }
+                for character in current_characters {
+                    if character.is_line(line) {
+                        characters_in_scene.insert(&character);
+                    }
+                }
+            }
+            current_page += 1;
+        }
+        if characters_in_scene.is_empty() {
+            return None;
+        }
+
+        Some(characters_in_scene.iter().copied().collect())
+    }
+
+    pub fn get_characters_for_page(&self, page_index: usize) -> Option<Vec<&Character>> {
+        let mut characters_on_page: HashSet<&Character> = HashSet::new();
+        let current_characters = &self.characters;
+
+        let Some(page) = self.pages.get(page_index) else {
+            return None;
+        };
+        'lines: for line in &page.lines {
+            if line.line_type != Some(SPType::SP_CHARACTER) {
+                continue 'lines;
+            }
+            if characters_on_page.len() == current_characters.len() {
+                break;
+            }
+            for character in current_characters {
+                if character.is_line(line) {
+                    characters_on_page.insert(&character);
+                }
             }
         }
-        None
-    }
 
-    pub fn get_character_from_name(&self, name: &String) -> Option<&Character> {
-        for ch in &self.characters {
-            if &ch.name == name {
-                return Some(&ch);
-            }
+        if characters_on_page.is_empty() {
+            return None;
         }
-        None
+
+        Some(characters_on_page.iter().copied().collect())
     }
 
-    pub fn get_character_from_id(&self, id: &CharacterID) -> Option<&Character> {
-        for ch in &self.characters {
-            if &ch.id == id {
-                return Some(&ch);
+    pub fn get_characters_for_location(
+        &self,
+        location_id: &LocationID,
+    ) -> Option<HashSet<&Character>> {
+        let mut characters_at_this_location: HashSet<&Character> = HashSet::new();
+        let scenes_with_location: Vec<(&SceneID, &Scene)> = self
+            .scenes
+            .iter()
+            .filter(|(id, scn)| scn.story_locations.contains(location_id))
+            .collect();
+
+        for (scn_id, scn) in scenes_with_location {
+            if characters_at_this_location.len() == self.characters.len() {
+                break;
             }
+            let Some(characters_in_this_scene) = self.get_characters_for_scene(scn_id) else {
+                return None; // something went very wrong...,
+            };
+            characters_at_this_location.extend(characters_in_this_scene);
         }
-        None
-    }
+        if characters_at_this_location.is_empty() {
+            return None;
+        }
 
-    pub fn get_characters_for_scene(&self, scene_id: &SceneID) -> Option<Vec<&CharacterID>> {
-        None
-    }
-
-    pub fn get_characters_for_page(&self, page_num_id: &PageID) -> Option<Vec<&Character>> {
-        None
+        Some(characters_at_this_location.iter().copied().collect())
     }
 
     // ------------ Get SCENES...
@@ -898,7 +995,7 @@ impl ScreenplayDocument {
     /// assert_eq!(**sorted.get(0).unwrap(), id_1);
     /// assert_eq!(**sorted.get(1).unwrap(), id_2)
     /// ```
-    pub fn get_all_scenes_sorted(&self) -> Option<Vec<&SceneID>> {
+    pub fn get_all_scenes_ordered(&self) -> Option<Vec<&SceneID>> {
         if self.scenes.len() == 0 {
             return None;
         }
@@ -921,7 +1018,7 @@ impl ScreenplayDocument {
         checked_coordinate: &ScreenplayCoordinate,
     ) -> Option<&SceneID> {
         let Some(page) = self.pages.get(checked_coordinate.page) else {
-            println!("DUCK SAUCE 2: HELP!");
+            //println!("DUCK SAUCE 2: HELP!");
             return None;
         };
 
@@ -935,8 +1032,8 @@ impl ScreenplayDocument {
                 continue;
             };
             let Some(scn_id) = &line.scene_id else {
-                println!("SCENE HEADING HAS NO SCENE ID!");
-                panic!();
+                //println!("SCENE HEADING HAS NO SCENE ID!");
+                //panic!();
                 continue;
             };
             //println!("SUCCESS PART ONE...?");
@@ -972,7 +1069,7 @@ impl ScreenplayDocument {
         return Some(id_opt);
     }
 
-    // ---?---------?
+    // This may be a contender for optimization....
     pub fn get_scene_ids_from_range(
         &self,
         start: &ScreenplayCoordinate,
@@ -1026,10 +1123,6 @@ impl ScreenplayDocument {
         Some(scenes)
     }
 
-    pub fn get_scene_from_id(&self, id: &SceneID) -> Option<&Scene> {
-        let scene = self.scenes.get(id)?;
-        Some(scene)
-    }
     pub fn get_scenes_from_ids(&self, ids: Vec<&SceneID>) -> Option<Vec<&Scene>> {
         let mut scenes: Vec<&Scene> = Vec::new();
         for id in ids {
@@ -1043,9 +1136,11 @@ impl ScreenplayDocument {
         Some(scenes)
     }
 
+    // I wrote this func but not sure what to use it for...?
+    // Might remove later if not useful in the future
     pub fn get_scenes_with_scene_heading_element(
         &self,
-        heading_element: &screenplay_document::SceneHeadingElement,
+        heading_element: &SceneHeadingElement,
     ) -> Option<Vec<&SceneID>> {
         let mut scene_ids: Vec<&SceneID> = Vec::new();
 
@@ -1073,7 +1168,7 @@ impl ScreenplayDocument {
         Some(scene_ids)
     }
 
-    pub fn get_all_scenes_on_page(&self, page_index: usize) -> Option<Vec<&SceneID>> {
+    pub fn get_scenes_on_page_by_idx(&self, page_index: usize) -> Option<Vec<&SceneID>> {
         let page = self.pages.get(page_index)?;
         if page.lines.is_empty() {
             return None;
@@ -1094,25 +1189,28 @@ impl ScreenplayDocument {
         Some(scenes)
     }
 
-    // this one seems horribly inefficient....
+    // this one seems inefficient....
+    // could skip lines of loop if we already pushed the current valid scene, and skip
+    // to the first line of the next scene to check each time...
     pub fn get_scenes_with_character_speaking(
         &self,
         character: &Character,
     ) -> Option<Vec<&SceneID>> {
+        let mut latest_scene_id: &Option<SceneID> = &None;
+        let mut next_scene_id: &Option<SceneID> = &None;
+        let Some(scenes_sorted) = self.get_all_scenes_ordered() else {
+            return None;
+        };
+
         let mut scenes_vec: Vec<&SceneID> = Vec::new();
-
-        //for (scn_idx, (scn_id, scn)) in self.scenes.iter().enumerate() {
-
-        //}
         for (p_idx, page) in self.pages.iter().enumerate() {
             for (l_idx, line) in page.lines.iter().enumerate() {
+                if line.scene_id.is_some() {
+                    latest_scene_id = &line.scene_id;
+                }
+
                 if character.is_line(&line) {
-                    let scoord = ScreenplayCoordinate {
-                        page: p_idx,
-                        line: l_idx,
-                        element: None,
-                    };
-                    let Some(sceneid) = self.get_scene_id_for_screenplay_coordinate(&scoord) else {
+                    let Some(sceneid) = latest_scene_id else {
                         continue;
                     };
                     if !scenes_vec.contains(&sceneid) {
@@ -1126,21 +1224,8 @@ impl ScreenplayDocument {
         } else {
             return Some(scenes_vec);
         }
-
-        
     }
 
-    pub fn get_scenes_on_page_by_nominal_number(
-        &self,
-        number: &PageNumber,
-    ) -> Option<Vec<&SceneID>> {
-        unimplemented!();
-        None
-    }
-    pub fn get_scenes_on_page_by_page_id(&self, id: &PageID) -> Option<Vec<&SceneID>> {
-        unimplemented!();
-        None
-    }
     pub fn get_scenes_with_location(&self, location: &LocationID) -> Option<Vec<&SceneID>> {
         let scenes: Vec<&SceneID> = self
             .scenes
@@ -1150,7 +1235,7 @@ impl ScreenplayDocument {
             .collect();
 
         if scenes.is_empty() {
-            let location_opt = self.get_location(&location);
+            let location_opt = self.locations.get(&location);
             println!("LOCATION: {:?}", location_opt);
             //panic!("COULDN'T FIND SCENES FOR LOCATION!");
             return None;
@@ -1160,95 +1245,115 @@ impl ScreenplayDocument {
 
     // ------------ Get PAGEs...
     // TODO: all get PAGE funcs should return a Vec of tuples (usize, &Page)
-    pub fn get_pages_for_scene(&self, scene_id: &SceneID) -> Option<Vec<usize>> {
-        let checked_scene = self.get_scene_from_id(scene_id)?;
+    pub fn get_pages_for_scene(&self, scene_id: &SceneID) -> Option<Vec<(usize, &Page)>> {
+        let checked_scene = self.scenes.get(scene_id)?;
 
-        let scenes_ordered = self.get_all_scenes_sorted()?;
+        let scenes_ordered = self.get_all_scenes_ordered()?;
         //pages.push(checked_scene.start.page.clone());
 
         for this_id in scenes_ordered {
-            let Some(scene_obj) = self.get_scene_from_id(this_id) else {
+            let Some(scene_obj) = self.scenes.get(this_id) else {
                 continue; // ERROR -- Tried to find a scene by ID that DOESN'T EXIST in the current script
             };
-            if scene_obj.start.page > checked_scene.start.page
+            if scene_obj.start.page < checked_scene.start.page
                 || (scene_obj.start.page == checked_scene.start.page
-                    && scene_obj.start.line > checked_scene.start.line)
+                    && scene_obj.start.line < checked_scene.start.line)
             {
-                let pages: Vec<usize> =
-                    (checked_scene.start.page.clone()..=scene_obj.start.page.clone()).collect();
-                return Some(pages);
+                continue;
             }
+            let page_indecies: Vec<usize> =
+                (checked_scene.start.page.clone()..=scene_obj.start.page.clone()).collect();
+
+            let mut pages: Vec<(usize, &Page)> = Vec::new();
+            for pi in page_indecies {
+                let Some(page) = &self.pages.get(pi) else {
+                    continue;
+                };
+                pages.push((pi.clone(), page));
+            }
+            if pages.is_empty() {
+                return None;
+            }
+            return Some(pages);
         }
 
         None
     }
 
+    pub fn get_pages_for_scenes(&self, scene_ids: Vec<&SceneID>) -> Option<Vec<(usize, &Page)>> {
+        let scenes_ordered = &self.get_all_scenes_ordered()?;
 
-    pub fn get_pages_for_location(&self, location: &Location) -> Option<Vec<(usize, &Page)>> {
-        unimplemented!();
-        None
+        let mut all_pages: Vec<(usize, &Page)> = Vec::new();
+
+        for scene_id in scene_ids {
+            let checked_scene = self.scenes.get(scene_id)?;
+
+            //pages.push(checked_scene.start.page.clone());
+
+            for this_id in scenes_ordered {
+                let Some(scene_obj) = self.scenes.get(this_id) else {
+                    continue; // ERROR -- Tried to find a scene by ID that DOESN'T EXIST in the current script
+                };
+                if scene_obj.start.page < checked_scene.start.page
+                    || (scene_obj.start.page == checked_scene.start.page
+                        && scene_obj.start.line < checked_scene.start.line)
+                {
+                    continue;
+                }
+                let page_indecies: Vec<usize> =
+                    (checked_scene.start.page.clone()..=scene_obj.start.page.clone()).collect();
+
+                let mut pages: Vec<(usize, &Page)> = Vec::new();
+                for pi in page_indecies {
+                    let Some(page) = &self.pages.get(pi) else {
+                        continue;
+                    };
+                    pages.push((pi.clone(), page));
+                }
+                if pages.is_empty() {
+                    continue;
+                }
+                for (idx, page) in pages {
+                    if !all_pages.contains(&(idx, page)) {
+                        all_pages.push((idx, page));
+                    }
+                }
+            }
+        }
+        if all_pages.is_empty() {
+            return None;
+        }
+
+        Some(all_pages)
+    }
+
+    pub fn get_pages_for_location(&self, location: &LocationID) -> Option<Vec<(usize, &Page)>> {
+        let Some(scenes_ordered) = self.get_all_scenes_ordered() else {
+            return None;
+        };
+        let scenes_filtered = self.filter_scenes_by_locations(scenes_ordered, vec![location])?;
+
+        return self.get_pages_for_scenes(scenes_filtered);
     }
 
     // ... this func may not be necessary, or is otherwise way too gross and like idek
-    pub fn get_pages_for_character(&self, character_id: &CharacterID) -> Option<Vec<&PageNumber>> {
-        unimplemented!();
-        //let Some(checked_character) = self.characters.get(character_id) else {
-        //    return None;
-        //};
-        let mut pages: Vec<&PageNumber> = Vec::new();
-        for page in &self.pages {
-            let character_lines: Vec<&Line> = page
-                .lines
-                .iter()
-                .filter(|line| match line.line_type {
-                    Some(SPType::SP_CHARACTER) | Some(SPType::SP_DUAL_CHARACTERS) => true,
-                    _ => false,
-                })
-                .collect();
-            if character_lines.is_empty() {
-                continue;
-            }
-            for line in character_lines {
-                let matched_elements: Vec<&TextElement> = line
-                    .text_elements
-                    .iter()
-                    .filter(|te| match te.element_type {
-                        Some(SPType::SP_CHARACTER)
-                        | Some(SPType::SP_DD_L_CHARACTER)
-                        | Some(SPType::SP_DD_R_CHARACTER) => true,
-                        _ => false,
-                    })
-                    .collect();
-                let mut current_character_name: String = String::new();
-                let mut last_type: Option<SPType> = None;
-                let mut matches_character_name = false;
-                for element in matched_elements {
-                    if element.element_type != last_type {
-                        last_type = element.element_type.clone();
-                        //if current_character_name == checked_character.name {
-                        //    matches_character_name = true;
-                        //    break;
-                        //}
-                        current_character_name = String::new();
-                    }
-                    if !current_character_name.is_empty() {
-                        current_character_name.push(' ');
-                    }
-                    current_character_name.push_str(&element.text.clone());
-                }
-                if matches_character_name {
-                    if let Some(pagenumber) = &page.page_number {
-                        pages.push(pagenumber);
-                    } else {
-                        // TODO: Add missing page numbers and/or PageIDs during parsing.
-                        // Title Page is "0", first content page is "1"
-                        //
-                        panic!("Each page should be assigned a page number and a page ID.")
-                    }
+    pub fn get_pages_for_character(&self, character: &Character) -> Option<Vec<(usize, &Page)>> {
+        let mut pages: Vec<(usize, &Page)> = Vec::new();
+
+        'pages: for (idx, page) in self.pages.iter().enumerate() {
+            for ln in &page.lines {
+                if character.is_line(ln) {
+                    //panic!("WHAT?");
+                    pages.push((idx, page));
+                    continue 'pages;
                 }
             }
         }
 
-        None
+        if pages.is_empty() {
+            return None;
+        }
+
+        Some(pages)
     }
 }
