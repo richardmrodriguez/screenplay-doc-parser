@@ -2,6 +2,7 @@ use std::fmt::Error;
 
 pub mod pdf_document;
 pub mod screenplay_document;
+pub mod reports;
 
 pub mod pdf_parser;
 
