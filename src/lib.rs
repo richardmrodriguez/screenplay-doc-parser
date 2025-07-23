@@ -107,10 +107,8 @@ mod tests {
 
         let scenes_opt = reports::get_all_scenes_ordered(&screenplay);
         if let Some(scenes) = scenes_opt {
-            for scn in scenes {
-                let Some(scene_obj) = screenplay.scenes.get(scn) else {
-                    continue;
-                };
+            for (scn, scene_obj) in scenes {
+                
                 let Some(leaf_location) = &scene_obj.story_locations.last() else {
                     continue;
                 };
@@ -166,6 +164,19 @@ mod tests {
             }
         }
 
+        println!("");
+
+        for (id, location) in &screenplay.locations {
+            if !location.sublocations.is_empty() {
+                continue;
+            }
+            println!("LOCATION_LEAF: {:?}", location.string);
+            let Some(path_string) = reports::get_full_string_for_location_path(&screenplay, &id) else {
+                continue;
+            };
+            println!("-- FULL PATH FOR LEAF: {:?}\n", path_string);
+        }
+
         println!("\n-----\n");
 
         if screenplay.characters.is_empty() {
@@ -186,10 +197,8 @@ mod tests {
                 continue;
             };
             println!("LOCATION: {:?}", location.string);
-            for sid in &filtered_scenes {
-                let Some(scene) = screenplay.scenes.get(sid) else {
-                    continue;
-                };
+            for (sid, scene) in &filtered_scenes {
+                
                 println!(
                     "--- SCENE COORDINATE: {:?}, {:?}",
                     scene.start.page, scene.start.line
@@ -280,10 +289,8 @@ mod tests {
                 get_scenes_with_char_bench_end
             );
             println!("--ALL SCENES WITH CHARACTER SPEAKING:");
-            for scn in &scenes_with_char_speaking {
-                let Some(scene_obj) = screenplay.scenes.get(scn) else {
-                    continue;
-                };
+            for (scn, scene_obj) in &scenes_with_char_speaking {
+                
                 let Some(location) = screenplay
                     .locations
                     .get(scene_obj.story_locations.last().unwrap())
@@ -352,10 +359,8 @@ mod tests {
                     println!("----- NO LINES -----");
                     continue;
                 };
-                for scn in &filtered_scenes {
-                    let Some(sceneobj) = screenplay.scenes.get(scn) else {
-                        continue;
-                    };
+                for (scn, sceneobj) in &filtered_scenes {
+                    
                     let Some(scene_line) = reports::get_line_from_coordinate(&screenplay,&sceneobj.start)
                     else {
                         continue;
