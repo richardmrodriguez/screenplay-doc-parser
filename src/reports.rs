@@ -1,13 +1,14 @@
 use std::{
-    collections::{HashMap, HashSet},
+    collections::{HashMap, HashSet, btree_map::Range},
     path,
     time::Instant,
 };
 
-use crate::screenplay_document::{self, LocationID, SPType, SceneID};
+use crate::screenplay_document::{self, LocationID, SPType, SceneID, ScreenplayCoordinate};
 
 // ------------ Get LOCATIONs...
-// TODO: All Get LOCATION funcs should return some kind of Vec of Tuples that includes at least (&LocationID, &Location)
+// TODO: Filter Locations by Characters speaking in location...
+// All "get location" or "filter location" funcs return a vec of &LocationID.
 
 ///
 /// Returns an Optional Vec of &LocationID, which make up the path to this leaf node, in order from root to leaf.
@@ -37,6 +38,8 @@ pub fn get_full_location_path_for_leaf_node<'a>(
     Some(id_path)
 }
 
+/// Returns the full Location path as a string (i.e. the full scene heading)
+/// for a given Location leaf node.
 pub fn get_full_string_for_location_path<'a>(
     screenplay_doc: &'a crate::screenplay_document::ScreenplayDocument,
     location_leaf_node: &'a screenplay_document::LocationID,
@@ -61,7 +64,6 @@ pub fn get_full_string_for_location_path<'a>(
     Some(path_string)
 }
 
-///
 /// Determines if a "location path" exists.
 ///
 /// Returns `None` if nothing matches the root of the path.
@@ -118,7 +120,6 @@ pub fn get_locations_with_matching_str<'a>(
     Some(loc_id_vec)
 }
 
-///
 /// Gets the Location ID of the root in this location path, from a given LocationID.
 ///
 /// Returns `'None` if the LocationID is invalid.
@@ -136,14 +137,12 @@ pub fn get_location_root_for_node<'a>(
 pub fn get_all_location_leafs<'a>(
     screenplay_document: &'a screenplay_document::ScreenplayDocument,
     location_id: &'a screenplay_document::LocationID,
-) -> Option<HashSet<&'a screenplay_document::LocationID>> {
+) -> Option<Vec<&'a screenplay_document::LocationID>> {
     let Some(location) = screenplay_document.locations.get(location_id) else {
         return None;
     };
     if location.sublocations.is_empty() {
-        let mut this_leaf_as_set: HashSet<&screenplay_document::LocationID> = HashSet::new();
-        this_leaf_as_set.insert(location_id);
-        return Some(this_leaf_as_set);
+        return Some(vec![location_id]);
     }
     let mut location_id_set: HashSet<&screenplay_document::LocationID> = HashSet::new();
     for sublocation_id in &location.sublocations {
@@ -155,41 +154,79 @@ pub fn get_all_location_leafs<'a>(
     if location_id_set.is_empty() {
         return None;
     }
-    Some(location_id_set)
+    Some(location_id_set.iter().copied().collect())
 }
 
-pub fn get_locations_with_character_speaking<'a>(
+pub fn filter_locations_by_character_speaking<'a>(
     screenplay_document: &'a crate::screenplay_document::ScreenplayDocument,
+    locations_to_filter: Vec<&'a screenplay_document::LocationID>,
     character: &'a screenplay_document::Character,
 ) -> Option<Vec<&'a screenplay_document::LocationID>> {
-    let scenes = get_scenes_with_character_speaking(screenplay_document, character)?;
-    let mut locations: HashSet<&screenplay_document::LocationID> = HashSet::new();
+    let scenes_with_character =
+        get_all_scenes_with_character_speaking(screenplay_document, character)?;
+    let mut filtered_locations: HashSet<&screenplay_document::LocationID> = HashSet::new();
 
-    scenes
+    scenes_with_character
         .iter()
-        .filter_map(|(s, scn)| screenplay_document.scenes.get(s))
-        .map(|scn| &scn.story_locations)
+        .map(|(s, scn)| &scn.story_locations)
         .for_each(|lcv| {
+            //TODO: filter this by ones that
             lcv.iter().for_each(|lc| {
-                locations.insert(lc);
+                if locations_to_filter.contains(&lc) {
+                    filtered_locations.insert(lc);
+                }
             });
         });
-    if locations.is_empty() {
+    if filtered_locations.is_empty() {
         return None;
     }
 
-    Some(locations.iter().copied().collect())
+    Some(filtered_locations.iter().copied().collect())
 }
 
-pub fn get_locations_on_page_by_idx(
+pub fn get_all_locations_with_character_speaking<'a>(
+    screenplay_document: &'a crate::screenplay_document::ScreenplayDocument,
+    character: &'a screenplay_document::Character,
+) -> Option<Vec<&'a screenplay_document::LocationID>> {
+    let all_locations = &screenplay_document.locations;
+    let all_locations_vec: Vec<_> = all_locations.iter().map(|(id, scn)| id).collect();
+
+    filter_locations_by_character_speaking(screenplay_document, all_locations_vec, character)
+}
+
+pub fn filter_locations_by_page_idx<'a>(
+    screenplay_document: &'a crate::screenplay_document::ScreenplayDocument,
+    locations: Vec<&'a screenplay_document::LocationID>,
+    page: usize,
+) -> Option<Vec<&'a screenplay_document::LocationID>> {
+    let Some(locations_on_page) = get_all_locations_on_page_by_index(screenplay_document, page)
+    else {
+        return None;
+    };
+
+    let mut filtered_locations: Vec<&screenplay_document::LocationID> = Vec::new();
+
+    for loc in locations {
+        if locations_on_page.contains(&loc) {
+            filtered_locations.push(loc);
+        }
+    }
+
+    if filtered_locations.is_empty() {
+        return None;
+    }
+    Some(filtered_locations)
+}
+
+pub fn get_all_locations_on_page_by_index(
     screenplay_document: &crate::screenplay_document::ScreenplayDocument,
     page: usize,
 ) -> Option<Vec<&screenplay_document::LocationID>> {
-    let mut locations: HashSet<&screenplay_document::LocationID> = HashSet::new();
-    let scenes = get_scenes_on_page_by_idx(screenplay_document, page)?;
+    let mut locations_on_page: HashSet<&screenplay_document::LocationID> = HashSet::new();
+    let scenes = get_all_scenes_on_page_by_index(screenplay_document, page)?;
     scenes
         .iter()
-        .filter_map(|(_, scene)| {
+        .filter_map(|(scene_id, scene)| {
             if scene.story_locations.is_empty() {
                 return None;
             }
@@ -198,23 +235,22 @@ pub fn get_locations_on_page_by_idx(
         })
         .for_each(|s| {
             s.iter().for_each(|l| {
-                locations.insert(l);
+                locations_on_page.insert(l);
             })
         });
 
-    if locations.is_empty() {
-        return Some(locations.iter().copied().collect());
+    if locations_on_page.is_empty() {
+        return None;
     }
-    None
+    Some(locations_on_page.iter().copied().collect())
 }
 
 // ------------ Get LINEs...
-// TODO: All Get LINE funcs should return a tuple (&Line, ScreenplayCoordinate)
-// OR a collection of tuples like Vec<(ScreenplayCoordiante, &Line) or a HashMap
+// All "get_line..." or "filter_lines" funcs should return
+// A) HashMap<ScreenplayCoordinate, &Line>
+// B) Line
 
-// This takes 100 ish microseconds to filter for a single scene, for a script < 20 pages...
-// this might be a candidate for optimization in the future...
-pub fn filter_lines_by_scene<'a>(
+pub fn filter_lines_by_multiple_scenes<'a>(
     screenplay_document: &crate::screenplay_document::ScreenplayDocument,
     lines: &HashMap<screenplay_document::ScreenplayCoordinate, &'a screenplay_document::Line>,
     scenes_filter: Vec<(&screenplay_document::SceneID, &screenplay_document::Scene)>,
@@ -223,7 +259,7 @@ pub fn filter_lines_by_scene<'a>(
         //panic!("EMPTY FILTER!");
         return None;
     }
-    let bench_time_test = Instant::now();
+
     let mut scn_filtered_lines: HashMap<
         screenplay_document::ScreenplayCoordinate,
         &screenplay_document::Line,
@@ -254,9 +290,25 @@ pub fn filter_lines_by_scene<'a>(
     if scn_filtered_lines.len() == lines.len() {
         //panic!("DIDN'T FILTER ANY LINES AT ALL!!!");
     }
-    let bench_res = bench_time_test.elapsed();
-    println!("\nDURATION TO FILTER BY SCENES: {:?}", bench_res);
+
+    //println!("\nDURATION TO FILTER BY SCENES: {:?}", bench_res);
     Some(scn_filtered_lines)
+}
+
+pub fn filter_lines_by_multiple_locations<'a>(
+    screenplay_doc: &'a screenplay_document::ScreenplayDocument,
+    lines: &HashMap<screenplay_document::ScreenplayCoordinate, &'a screenplay_document::Line>,
+    locations_filter: Vec<&screenplay_document::LocationID>,
+) -> Option<HashMap<screenplay_document::ScreenplayCoordinate, &'a screenplay_document::Line>> {
+    let Some(scenes_ordered) = get_all_scenes_ordered(screenplay_doc) else {
+        return None;
+    };
+    let Some(scenes_filtered) =
+        filter_scenes_by_locations(screenplay_doc, scenes_ordered, locations_filter)
+    else {
+        return None;
+    };
+    return filter_lines_by_multiple_scenes(screenplay_doc, lines, scenes_filtered);
 }
 
 pub fn get_all_lines_of_dialogue_for_character<'a>(
@@ -321,15 +373,18 @@ pub fn get_line_from_coordinate<'a>(
 }
 
 // ------------ Get CHARACTERS...
+// All returns should be Vec<&Character>.
+// TODO: Filter Characters by Scenes they speak in,
+// Locations they speak in,
 
-pub fn get_characters_for_scene<'a>(
+pub fn filter_characters_by_scene<'a>(
     screenplay_document: &'a crate::screenplay_document::ScreenplayDocument,
-    scene_id: &'a screenplay_document::SceneID,
+    characters: &Vec<&'a screenplay_document::Character>,
+    scene_id: &screenplay_document::SceneID,
 ) -> Option<Vec<&'a screenplay_document::Character>> {
     let scn = screenplay_document.scenes.get(scene_id)?;
     let mut current_page = scn.start.page;
     let mut characters_in_scene: HashSet<&screenplay_document::Character> = HashSet::new();
-    let current_characters = &screenplay_document.characters;
 
     'seeking: loop {
         let Some(page) = screenplay_document.pages.get(current_page) else {
@@ -351,10 +406,10 @@ pub fn get_characters_for_scene<'a>(
             if line.line_type != Some(SPType::SP_CHARACTER) {
                 continue 'lines;
             }
-            if characters_in_scene.len() == current_characters.len() {
+            if characters_in_scene.len() == characters.len() {
                 break 'seeking;
             }
-            for character in current_characters {
+            for character in characters {
                 if character.is_line(line) {
                     characters_in_scene.insert(&character);
                 }
@@ -369,12 +424,20 @@ pub fn get_characters_for_scene<'a>(
     Some(characters_in_scene.iter().copied().collect())
 }
 
-pub fn get_characters_for_page(
-    screenplay_document: &crate::screenplay_document::ScreenplayDocument,
+pub fn get_characters_for_scene<'a>(
+    screenplay_document: &'a crate::screenplay_document::ScreenplayDocument,
+    scene_id: &screenplay_document::SceneID,
+) -> Option<Vec<&'a screenplay_document::Character>> {
+    let current_characters = &screenplay_document.characters.iter().collect();
+    filter_characters_by_scene(screenplay_document, current_characters, scene_id)
+}
+
+pub fn filter_characters_by_page_index<'a>(
+    screenplay_document: &'a crate::screenplay_document::ScreenplayDocument,
+    characters_to_filter: Vec<&'a screenplay_document::Character>,
     page_index: usize,
-) -> Option<Vec<&screenplay_document::Character>> {
+) -> Option<Vec<&'a screenplay_document::Character>> {
     let mut characters_on_page: HashSet<&screenplay_document::Character> = HashSet::new();
-    let current_characters = &screenplay_document.characters;
 
     let Some(page) = screenplay_document.pages.get(page_index) else {
         return None;
@@ -383,12 +446,12 @@ pub fn get_characters_for_page(
         if line.line_type != Some(SPType::SP_CHARACTER) {
             continue 'lines;
         }
-        if characters_on_page.len() == current_characters.len() {
+        if characters_on_page.len() == characters_to_filter.len() {
             break;
         }
-        for character in current_characters {
+        for character in &characters_to_filter {
             if character.is_line(line) {
-                characters_on_page.insert(&character);
+                characters_on_page.insert(character);
             }
         }
     }
@@ -400,38 +463,67 @@ pub fn get_characters_for_page(
     Some(characters_on_page.iter().copied().collect())
 }
 
-pub fn get_characters_for_location<'a>(
-    screenplay_document: &'a crate::screenplay_document::ScreenplayDocument,
-    location_id: &'a screenplay_document::LocationID,
-) -> Option<HashSet<&'a screenplay_document::Character>> {
-    let mut characters_at_this_location: HashSet<&screenplay_document::Character> = HashSet::new();
-    let scenes_with_location: Vec<(&screenplay_document::SceneID, &screenplay_document::Scene)> =
-        screenplay_document
-            .scenes
-            .iter()
-            .filter(|(id, scn)| scn.story_locations.contains(location_id))
-            .collect();
+pub fn get_all_characters_on_page_by_index(
+    screenplay_document: &crate::screenplay_document::ScreenplayDocument,
+    page_index: usize,
+) -> Option<Vec<&screenplay_document::Character>> {
+    let all_characters = screenplay_document.characters.iter().collect();
+    //let characters_as_vec = all_characters
+    filter_characters_by_page_index(&screenplay_document, all_characters, page_index)
+}
 
-    for (scn_id, scn) in scenes_with_location {
-        if characters_at_this_location.len() == screenplay_document.characters.len() {
-            break;
-        }
-        let Some(characters_in_this_scene) = get_characters_for_scene(screenplay_document, scn_id)
+// TODO: This function is wrong and bad???
+// the test in the lib.rs just filters the scenes by location
+// and then calls get_characters_for_scene,
+// so that's what this function should do then...
+pub fn filter_characters_by_location<'a>(
+    screenplay_document: &'a crate::screenplay_document::ScreenplayDocument,
+    characters_to_filter: Vec<&'a screenplay_document::Character>,
+    location_id: &'a screenplay_document::LocationID,
+) -> Option<Vec<&'a screenplay_document::Character>> {
+    let mut characters_at_this_location: HashSet<&screenplay_document::Character> = HashSet::new();
+    let Some(scenes_with_location) = get_scenes_with_location(screenplay_document, location_id)
+    else {
+        return None;
+    };
+    for (scene_id, _) in scenes_with_location {
+        let Some(new_character_matches) =
+            filter_characters_by_scene(screenplay_document, &characters_to_filter, scene_id)
         else {
-            return None; // something went very wrong...,
+            continue;
         };
-        characters_at_this_location.extend(characters_in_this_scene);
+        for character_match in new_character_matches {
+            if characters_to_filter.contains(&character_match) {
+                characters_at_this_location.insert(character_match);
+            }
+        }
     }
     if characters_at_this_location.is_empty() {
         return None;
     }
-
     Some(characters_at_this_location.iter().copied().collect())
 }
 
+pub fn get_characters_for_location<'a>(
+    screenplay_document: &'a crate::screenplay_document::ScreenplayDocument,
+    location_id: &'a screenplay_document::LocationID,
+) -> Option<Vec<&'a screenplay_document::Character>> {
+    let all_characters = screenplay_document.characters.iter().collect();
+    let Some(thing) = filter_characters_by_location(
+        screenplay_document,
+        all_characters,
+        location_id,
+    ) else {
+        return None;
+    };
+    if thing.is_empty() {
+        return None;
+    };
+    Some(thing)
+}
+
 // ------------ Get SCENES...
-// TODO: All Get SCENE funcs should return a tuple (&SceneID, &Scene)
-// OR a Colleciton of tuples Vec<(&SceneID, &Scene) OR HashMap(&SceneID, &Scene)
+// TODO: FILTER scenes by character speaking...
 
 pub fn filter_scenes_by_locations<'a>(
     screenplay_document: &'a crate::screenplay_document::ScreenplayDocument,
@@ -450,8 +542,7 @@ pub fn filter_scenes_by_locations<'a>(
         Vec::new();
     for loc in locations {
         let Some(scenes_for_loc) = get_scenes_with_location(screenplay_document, loc) else {
-            panic!("COULDN'T FIND SCENES WITH THIS LOCATION?!");
-            continue;
+            return None; // Could not find ANY scenes with this location...
         };
 
         for (scene, _) in scenes_for_loc {
@@ -474,7 +565,9 @@ pub fn filter_scenes_by_locations<'a>(
     Some(filtered)
 }
 
-/// Gets a Vec of all `SceneID`s in the document, sorted by document order.
+/// Gets a Vec of all Scenes s in the document, sorted by document order.
+///
+/// Returns a Vec<(&SceneID, &Scene)>.
 ///
 /// # Example
 ///
@@ -509,6 +602,7 @@ pub fn filter_scenes_by_locations<'a>(
 /// assert_eq!(**sorted.get(0).unwrap(), id_1);
 /// assert_eq!(**sorted.get(1).unwrap(), id_2)
 /// ```
+///
 pub fn get_all_scenes_ordered<'a>(
     screenplay_document: &'a crate::screenplay_document::ScreenplayDocument,
 ) -> Option<
@@ -674,10 +768,19 @@ pub fn get_scenes_from_range<'a>(
     Some(scenes_in_range)
 }
 
-pub fn get_scenes_on_page_by_idx(
-    screenplay_document: &crate::screenplay_document::ScreenplayDocument,
+pub fn filter_scenes_by_page_index<'a>(
+    screenplay_document: &'a crate::screenplay_document::ScreenplayDocument,
+    scenes_to_filter: Vec<(
+        &'a screenplay_document::SceneID,
+        &'a screenplay_document::Scene,
+    )>,
     page_index: usize,
-) -> Option<Vec<(&screenplay_document::SceneID, &screenplay_document::Scene)>> {
+) -> Option<
+    Vec<(
+        &'a screenplay_document::SceneID,
+        &'a screenplay_document::Scene,
+    )>,
+> {
     let page = screenplay_document.pages.get(page_index)?;
     if page.lines.is_empty() {
         return None;
@@ -693,19 +796,33 @@ pub fn get_scenes_on_page_by_idx(
         line: last_line_idx,
         element: None,
     };
-    let Some(scenes) = get_scenes_from_range(screenplay_document, &start, &end) else {
+    let Some(scenes_on_page) = get_scenes_from_range(screenplay_document, &start, &end) else {
         return None;
     };
 
-    let collected: Vec<_> = scenes.iter().copied().collect();
+    let filtered: Vec<_> = scenes_on_page
+        .iter()
+        .filter(|s| scenes_to_filter.contains(&s))
+        .copied()
+        .collect();
 
-    Some(collected)
+    Some(filtered)
+}
+
+pub fn get_all_scenes_on_page_by_index(
+    screenplay_document: &crate::screenplay_document::ScreenplayDocument,
+    page_index: usize,
+) -> Option<Vec<(&screenplay_document::SceneID, &screenplay_document::Scene)>> {
+    let Some(all_scenes_ordered) = get_all_scenes_ordered(screenplay_document) else {
+        return None;
+    };
+    filter_scenes_by_page_index(screenplay_document, all_scenes_ordered, page_index)
 }
 
 // this one seems inefficient....
 // could skip lines of loop if we already pushed the current valid scene, and skip
 // to the first line of the next scene to check each time...
-pub fn get_scenes_with_character_speaking<'a>(
+pub fn get_all_scenes_with_character_speaking<'a>(
     screenplay_document: &'a crate::screenplay_document::ScreenplayDocument,
     character: &screenplay_document::Character,
 ) -> Option<
@@ -714,32 +831,61 @@ pub fn get_scenes_with_character_speaking<'a>(
         &'a screenplay_document::Scene,
     )>,
 > {
-    let mut latest_scene_id: &Option<screenplay_document::SceneID> = &None;
-    let mut next_scene_id: &Option<screenplay_document::SceneID> = &None;
-    let Some(scenes_sorted) = get_all_scenes_ordered(screenplay_document) else {
+    let all_scenes_sorted = get_all_scenes_ordered(screenplay_document)?;
+    return filter_scenes_by_character_speaking(screenplay_document, all_scenes_sorted, character);
+}
+
+pub fn filter_scenes_by_character_speaking<'a>(
+    screenplay_document: &'a crate::screenplay_document::ScreenplayDocument,
+    mut scenes_to_filter: Vec<(
+        &'a screenplay_document::SceneID,
+        &'a screenplay_document::Scene,
+    )>,
+    character: &screenplay_document::Character,
+) -> Option<
+    Vec<(
+        &'a screenplay_document::SceneID,
+        &'a screenplay_document::Scene,
+    )>,
+> {
+    if scenes_to_filter.is_empty() {
         return None;
-    };
+    }
+    scenes_to_filter.sort_by(|(_a, b), (_c, d)| {
+        (b.start.page, b.start.line).cmp(&(d.start.page, d.start.line))
+    });
 
     let mut scenes_vec: Vec<_> = Vec::new();
-    for (p_idx, page) in screenplay_document.pages.iter().enumerate() {
-        'lines: for (l_idx, line) in page.lines.iter().enumerate() {
-            if line.scene_id.is_some() {
-                latest_scene_id = &line.scene_id;
-            }
 
-            if character.is_line(&line) {
-                let Some(sceneid) = latest_scene_id else {
-                    continue;
-                };
-                for (scn_id, scn) in &scenes_vec {
-                    if *scn_id == sceneid {
-                        continue 'lines;
-                    }
+    // COULD OPTIMIZE
+    // this just re-starts iteration for ALL PAGES every time
+    // ... I tried to optimize it but I just broke it LMAO I'm gonna leave it as is...
+    'scenes: for (scn_id, scn) in scenes_to_filter {
+        'pages: for (p_idx, page) in screenplay_document.pages.iter().enumerate() {
+            'lines: for (l_idx, line) in page.lines.iter().enumerate() {
+                if p_idx < scn.start.page {
+                    continue 'pages;
                 }
-                let Some(scene) = screenplay_document.scenes.get(sceneid) else {
+                if l_idx < scn.start.line {
                     continue 'lines;
-                };
-                scenes_vec.push((sceneid, scene));
+                }
+                if line.line_type
+                    == Some(SPType::SP_SCENE_HEADING(
+                        screenplay_document::SceneHeadingElement::Line,
+                    ))
+                    && line.scene_id != Some(*scn_id)
+                {
+                    continue 'scenes;
+                }
+                if character.is_line(&line) {
+                    for (existing_id, _) in &scenes_vec {
+                        if *existing_id == scn_id {
+                            continue 'lines;
+                        }
+                    }
+
+                    scenes_vec.push((scn_id, scn));
+                }
             }
         }
     }
@@ -776,8 +922,9 @@ pub fn get_scenes_with_location<'a>(
 }
 
 // ------------ Get PAGEs...
+// TODO: Filter pages by location, character
 
-pub fn get_pages_for_scene<'a>(
+pub fn get_all_pages_for_scene<'a>(
     screenplay_document: &'a crate::screenplay_document::ScreenplayDocument,
     scene_id: &'a screenplay_document::SceneID,
 ) -> Option<Vec<(usize, &'a screenplay_document::Page)>> {
@@ -812,7 +959,7 @@ pub fn get_pages_for_scene<'a>(
     None
 }
 
-fn get_all_pages_for_multiple_scenes<'a>(
+pub fn get_all_pages_for_multiple_scenes<'a>(
     screenplay_document: &'a crate::screenplay_document::ScreenplayDocument,
     scene_ids: Vec<(&screenplay_document::SceneID, &screenplay_document::Scene)>,
 ) -> Option<Vec<(usize, &'a screenplay_document::Page)>> {
@@ -857,7 +1004,7 @@ fn get_all_pages_for_multiple_scenes<'a>(
     Some(all_pages)
 }
 
-pub fn get_pages_for_location<'a>(
+pub fn get_all_pages_for_location<'a>(
     screenplay_document: &'a crate::screenplay_document::ScreenplayDocument,
     location: &'a screenplay_document::LocationID,
 ) -> Option<Vec<(usize, &'a screenplay_document::Page)>> {
@@ -870,8 +1017,7 @@ pub fn get_pages_for_location<'a>(
     return get_all_pages_for_multiple_scenes(screenplay_document, scenes_filtered);
 }
 
-// ... this func may not be necessary, or is otherwise way too gross and like idek
-pub fn get_pages_for_character<'a>(
+pub fn get_all_pages_for_character_speaking<'a>(
     screenplay_document: &'a crate::screenplay_document::ScreenplayDocument,
     character: &'a screenplay_document::Character,
 ) -> Option<Vec<(usize, &'a screenplay_document::Page)>> {
@@ -880,7 +1026,6 @@ pub fn get_pages_for_character<'a>(
     'pages: for (idx, page) in screenplay_document.pages.iter().enumerate() {
         for ln in &page.lines {
             if character.is_line(ln) {
-                //panic!("WHAT?");
                 pages.push((idx, page));
                 continue 'pages;
             }
@@ -892,4 +1037,99 @@ pub fn get_pages_for_character<'a>(
     }
 
     Some(pages)
+}
+
+pub fn filter_pages_by_character_speaking<'a>(
+    screenplay_document: &'a crate::screenplay_document::ScreenplayDocument,
+    pages_range: (usize, usize),
+    character: &'a screenplay_document::Character,
+) -> Option<Vec<(usize, &'a screenplay_document::Page)>> {
+    let mut filtered_pages: Vec<(usize, &screenplay_document::Page)> = Vec::new();
+
+    'page_indices: for i in pages_range.0..=pages_range.1 {
+        let Some(page) = screenplay_document.pages.get(i) else {
+            continue;
+        };
+
+        for ln in &page.lines {
+            if character.is_line(ln) {
+                //panic!("WHAT?");
+                filtered_pages.push((i, page));
+                continue 'page_indices;
+            }
+        }
+    }
+    if filtered_pages.is_empty() {
+        return None;
+    }
+
+    Some(filtered_pages)
+}
+
+pub fn filter_pages_by_multiple_characters_speaking<'a>(
+    screenplay_document: &'a crate::screenplay_document::ScreenplayDocument,
+    pages_range: (usize, usize),
+    characters: Vec<&'a screenplay_document::Character>,
+) -> Option<Vec<(usize, &'a screenplay_document::Page)>> {
+    let mut filtered_pages: Vec<(usize, &screenplay_document::Page)> = Vec::new();
+
+    'page_indices: for i in pages_range.0..=pages_range.1 {
+        let Some(page) = screenplay_document.pages.get(i) else {
+            continue;
+        };
+
+        for ln in &page.lines {
+            for character in &characters {
+                if character.is_line(ln) {
+                    filtered_pages.push((i, page));
+                    continue 'page_indices;
+                }
+            }
+        }
+    }
+    if filtered_pages.is_empty() {
+        return None;
+    }
+
+    Some(filtered_pages)
+}
+
+pub fn filter_pages_by_location<'a>(
+    screenplay_document: &'a crate::screenplay_document::ScreenplayDocument,
+    pages_range: (usize, usize),
+    location: &'a screenplay_document::LocationID,
+) -> Option<Vec<(usize, &'a screenplay_document::Page)>> {
+    let Some(scenes_ordered) = get_all_scenes_ordered(screenplay_document) else {
+        return None;
+    };
+    let scenes_within_page_range: Vec<(_)> = scenes_ordered
+        .iter()
+        .filter(|(scn_id, scn)| pages_range.0 < scn.start.page && scn.start.page < pages_range.1)
+        .copied()
+        .collect();
+    let scenes_filtered = filter_scenes_by_locations(
+        screenplay_document,
+        scenes_within_page_range,
+        vec![location],
+    )?;
+
+    return get_all_pages_for_multiple_scenes(screenplay_document, scenes_filtered);
+}
+pub fn filter_pages_by_multiple_locations<'a>(
+    screenplay_document: &'a crate::screenplay_document::ScreenplayDocument,
+    pages_range: (usize, usize),
+    locations: Vec<&'a screenplay_document::LocationID>,
+) -> Option<Vec<(usize, &'a screenplay_document::Page)>> {
+    let Some(scenes_ordered) = get_all_scenes_ordered(screenplay_document) else {
+        return None;
+    };
+    let scenes_within_page_range: Vec<(_)> = scenes_ordered
+        .iter()
+        .filter(|(scn_id, scn)| pages_range.0 < scn.start.page && scn.start.page < pages_range.1)
+        .copied()
+        .collect();
+    let scenes_filtered =
+        filter_scenes_by_locations(screenplay_document, scenes_within_page_range, locations)?;
+
+    return get_all_pages_for_multiple_scenes(screenplay_document, scenes_filtered);
 }

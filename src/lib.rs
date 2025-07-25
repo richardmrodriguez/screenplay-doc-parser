@@ -105,27 +105,43 @@ mod tests {
         //    println!("     PAGE: {:?} | LINES: {:?}", page.page_number, page.lines.len())
         //}
 
+        println!("ALL SCENES:");
         let scenes_opt = reports::get_all_scenes_ordered(&screenplay);
         if let Some(scenes) = scenes_opt {
             for (scn, scene_obj) in scenes {
-                
                 let Some(leaf_location) = &scene_obj.story_locations.last() else {
                     continue;
                 };
-                let Some(scene_loc) = screenplay.locations.get(&leaf_location) else {
-                    continue;
-                };
                 println!(
-                    "SCENE: {:?} | LOCATION: {:?}",
-                    scene_obj.start, scene_loc.string
+                    "SCENE: P:{:<3?}, L:{:<3?}  | LOCATION: {:?}",
+                    scene_obj.start.page,
+                    scene_obj.start.line,
+                    reports::get_full_string_for_location_path(&screenplay, &leaf_location)
                 );
             }
             println!("");
         }
+        println!("\n- SCENES PER PAGE:");
+        for (p_idx, page) in screenplay.pages.iter().enumerate() {
+            let Some(scenes_for_page) =
+                reports::get_all_scenes_on_page_by_index(&screenplay, p_idx)
+            else {
+                continue;
+            };
+            println!("--- PAGE: {:?}", p_idx);
+            for (id, scn) in scenes_for_page {
+                for loc in &scn.story_locations {
+                    println!(
+                        "----- {:?}",
+                        reports::get_full_string_for_location_path(&screenplay, &loc)
+                    )
+                }
+            }
+        }
 
         // Test Get LOCATIONS...
 
-        println!("ALL LOCATIONS:");
+        println!("\nALL LOCATIONS:");
         for (id, location) in &screenplay.locations {
             println!("LOCATION_ID: {:?}, | LOCATION: {:}", id, location.string);
         }
@@ -171,7 +187,8 @@ mod tests {
                 continue;
             }
             println!("LOCATION_LEAF: {:?}", location.string);
-            let Some(path_string) = reports::get_full_string_for_location_path(&screenplay, &id) else {
+            let Some(path_string) = reports::get_full_string_for_location_path(&screenplay, &id)
+            else {
                 continue;
             };
             println!("-- FULL PATH FOR LEAF: {:?}\n", path_string);
@@ -185,35 +202,37 @@ mod tests {
 
         // Test GET CHARACTER...
 
-        println!("\n - GET CHARACTERS FOR LOCATION:");
+        println!("\n- GET CHARACTERS PER SCENE:");
+        let scenes_ordered = reports::get_all_scenes_ordered(&screenplay).unwrap();
+        for (scn_id, scn) in scenes_ordered {
+            let Some(characters) = reports::get_characters_for_scene(&screenplay, scn_id) else {
+                continue;
+            };
 
-        for (l_id, location) in &screenplay.locations {
-            let Some(ordered_scenes) = reports::get_all_scenes_ordered(&screenplay) else {
-                continue;
-            };
-            let Some(filtered_scenes) =
-                reports::filter_scenes_by_locations(&screenplay, ordered_scenes, vec![l_id])
-            else {
-                continue;
-            };
-            println!("LOCATION: {:?}", location.string);
-            for (sid, scene) in &filtered_scenes {
-                
-                println!(
-                    "--- SCENE COORDINATE: {:?}, {:?}",
-                    scene.start.page, scene.start.line
-                );
-                let Some(characters) = reports::get_characters_for_scene(&screenplay, sid) else {
-                    println!("----- NO Characters speaking in this scene!");
-                    continue;
-                };
-                for character in characters {
-                    print!("----");
-                    print!("- {:?} ", character.name);
-                }
-                println!("");
+            println!(
+                "--- SCENE: P:{:<4?}, L:{:<4}",
+                scn.start.page, scn.start.line
+            );
+            for character in characters {
+                println!("----- {:?}", character.name)
             }
         }
+
+        println!("\n- GET CHARACTERS PER LOCATION:");
+        for (loc_id, loc) in &screenplay.locations{
+
+            let Some(characters) = reports::get_characters_for_location(&screenplay, loc_id) else {
+                println!("NO CHARACTERS FOUND AT LOCATION?!");
+                continue;
+            };
+            
+            println!("--- LOCATION: {:?}", reports::get_full_string_for_location_path(&screenplay, loc_id));
+
+            for character in characters {
+                println!("----- {:?}", character.name)
+            }
+        }
+        
 
         println!("\n - GET CHARACTERS PER PAGE:");
         for (pidx, page) in screenplay.pages.iter().enumerate() {
@@ -224,7 +243,8 @@ mod tests {
                     "_".to_string()
                 }
             });
-            let Some(characters) = reports::get_characters_for_page(&screenplay, pidx) else {
+            let Some(characters) = reports::get_all_characters_on_page_by_index(&screenplay, pidx)
+            else {
                 println!("No Characters on this page!");
                 continue;
             };
@@ -244,7 +264,9 @@ mod tests {
                 character.id, character.name
             );
             let get_all_char_lines_start = Instant::now();
-            let Some(lines) = reports::get_all_lines_of_dialogue_for_character(&screenplay,character) else {
+            let Some(lines) =
+                reports::get_all_lines_of_dialogue_for_character(&screenplay, character)
+            else {
                 //panic!();
                 continue;
             };
@@ -277,7 +299,7 @@ mod tests {
         for character in &screenplay.characters {
             let get_scenes_with_char_bench_start = Instant::now();
             let Some(scenes_with_char_speaking) =
-                reports::get_scenes_with_character_speaking(&screenplay,&character)
+                reports::get_all_scenes_with_character_speaking(&screenplay, &character)
             else {
                 continue;
             };
@@ -290,7 +312,6 @@ mod tests {
             );
             println!("--ALL SCENES WITH CHARACTER SPEAKING:");
             for (scn, scene_obj) in &scenes_with_char_speaking {
-                
                 let Some(location) = screenplay
                     .locations
                     .get(scene_obj.story_locations.last().unwrap())
@@ -302,10 +323,46 @@ mod tests {
             }
         }
 
+        // Test GET LOCATIONS
+
+        println!("\n- GET LOCATIONS PER CHARACTER:");
+        for character in &screenplay.characters {
+            let Some(locations_per_character) =
+                reports::get_all_locations_with_character_speaking(&screenplay, &character)
+            else {
+                println!("No locations for character?!?!");
+                continue;
+            };
+            println!("-- CHARACTER: {:?}", character.name);
+            for lc in locations_per_character {
+                println!(
+                    "----- {:?}",
+                    reports::get_full_string_for_location_path(&screenplay, lc)
+                );
+            }
+        }
+
+        println!("\n- GET LOCATIONS PER PAGE:");
+        for page_num in 0..=screenplay.pages.len() - 1 {
+            println!("PAGE: {}", page_num);
+            let Some(locations_on_page) =
+                reports::get_all_locations_on_page_by_index(&screenplay, page_num)
+            else {
+                println!(" NO LOCATIONS ON PAGE????");
+                continue;
+            };
+            for loc in locations_on_page {
+                println!(
+                    "----- {:?}",
+                    reports::get_full_string_for_location_path(&screenplay, loc)
+                );
+            }
+        }
+
         // Test GET PAGES
         println!("\n - GET PAGES FOR LOCATION:");
         for (l_id, location) in &screenplay.locations {
-            let Some(pages) = reports::get_pages_for_location(&screenplay, &l_id) else {
+            let Some(pages) = reports::get_all_pages_for_location(&screenplay, &l_id) else {
                 continue;
             };
             println!("--- LOCATION: {:?}", location.string);
@@ -317,7 +374,9 @@ mod tests {
         println!("\n - GET PAGES FOR CHARACTER:");
         for character in &screenplay.characters {
             println!("--- CHARACTER: {:?}", character.name);
-            let Some(pages) = reports::get_pages_for_character(&screenplay, character) else {
+            let Some(pages) =
+                reports::get_all_pages_for_character_speaking(&screenplay, &character)
+            else {
                 //panic!();
                 continue;
             };
@@ -330,7 +389,7 @@ mod tests {
 
         let print_filtered_dialogue = false;
 
-        println!("\nFILTERED CHARACTER DIALOGUE LINES:");
+        println!("\nLOCATION FILTERED CHARACTER DIALOGUE LINES:");
         for (location_id, location) in &screenplay.locations {
             if !print_filtered_dialogue {
                 break;
@@ -346,7 +405,7 @@ mod tests {
                     continue;
                 };
                 let Some(scenes_with_char_speaking) =
-                    reports::get_scenes_with_character_speaking(&screenplay, &character)
+                    reports::get_all_scenes_with_character_speaking(&screenplay, &character)
                 else {
                     continue;
                 };
@@ -360,8 +419,8 @@ mod tests {
                     continue;
                 };
                 for (scn, sceneobj) in &filtered_scenes {
-                    
-                    let Some(scene_line) = reports::get_line_from_coordinate(&screenplay,&sceneobj.start)
+                    let Some(scene_line) =
+                        reports::get_line_from_coordinate(&screenplay, &sceneobj.start)
                     else {
                         continue;
                     };
@@ -371,7 +430,7 @@ mod tests {
                     panic!("NO SCENES ACTUALLY FILTERED!");
                 }
                 let Some(mut filtered_lines) =
-                    reports::filter_lines_by_scene(&screenplay,&lines, filtered_scenes)
+                    reports::filter_lines_by_multiple_scenes(&screenplay, &lines, filtered_scenes)
                 else {
                     continue; // all lines should categorically be part of SOME scene... unless there's ZERO "proper" scene headings...
                 };
