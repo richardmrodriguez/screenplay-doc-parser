@@ -1,10 +1,8 @@
 use std::{
-    collections::{HashMap, HashSet, btree_map::Range},
-    path,
-    time::Instant,
+    collections::{HashMap, HashSet},
 };
 
-use crate::screenplay_document::{self, LocationID, SPType, SceneID, ScreenplayCoordinate};
+use crate::screenplay_document::{self, SPType};
 
 // ------------ Get LOCATIONs...
 // TODO: Filter Locations by Characters speaking in location...
@@ -17,8 +15,8 @@ pub fn get_full_location_path_for_leaf_node<'a>(
     screenplay_doc: &'a crate::screenplay_document::ScreenplayDocument,
     location: &'a screenplay_document::LocationID,
 ) -> Option<(Vec<&'a screenplay_document::LocationID>)> {
-    let mut current_location_node_id: &LocationID = location;
-    let mut id_path: Vec<&LocationID> = vec![current_location_node_id];
+    let mut current_location_node_id: &screenplay_document::LocationID = location;
+    let mut id_path: Vec<&screenplay_document::LocationID> = vec![current_location_node_id];
     loop {
         let Some(location_node) = screenplay_doc.locations.get(current_location_node_id) else {
             return None; // ERROR: BAD LOCATION ID!
@@ -362,14 +360,6 @@ pub fn get_all_lines_of_dialogue_for_character<'a>(
         return None;
     }
     Some(lines_with_coords)
-}
-
-pub fn get_line_from_coordinate<'a>(
-    screenplay_document: &'a crate::screenplay_document::ScreenplayDocument,
-    coordinate: &'a screenplay_document::ScreenplayCoordinate,
-) -> Option<&'a screenplay_document::Line> {
-    let page = screenplay_document.pages.get(coordinate.page)?;
-    page.lines.get(coordinate.line)
 }
 
 // ------------ Get CHARACTERS...

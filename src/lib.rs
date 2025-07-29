@@ -219,20 +219,21 @@ mod tests {
         }
 
         println!("\n- GET CHARACTERS PER LOCATION:");
-        for (loc_id, loc) in &screenplay.locations{
-
+        for (loc_id, loc) in &screenplay.locations {
             let Some(characters) = reports::get_characters_for_location(&screenplay, loc_id) else {
                 println!("NO CHARACTERS FOUND AT LOCATION?!");
                 continue;
             };
-            
-            println!("--- LOCATION: {:?}", reports::get_full_string_for_location_path(&screenplay, loc_id));
+
+            println!(
+                "--- LOCATION: {:?}",
+                reports::get_full_string_for_location_path(&screenplay, loc_id)
+            );
 
             for character in characters {
                 println!("----- {:?}", character.name)
             }
         }
-        
 
         println!("\n - GET CHARACTERS PER PAGE:");
         for (pidx, page) in screenplay.pages.iter().enumerate() {
@@ -419,10 +420,11 @@ mod tests {
                     continue;
                 };
                 for (scn, sceneobj) in &filtered_scenes {
-                    let Some(scene_line) =
-                        reports::get_line_from_coordinate(&screenplay, &sceneobj.start)
-                    else {
-                        continue;
+                    let Some(page) = &screenplay.pages.get(sceneobj.start.page) else {
+                        panic!("Could not find page.");
+                    };
+                    let Some(scene_line) = page.lines.get(sceneobj.start.line) else {
+                        panic!("Could not find line in this page.");
                     };
                 }
 
