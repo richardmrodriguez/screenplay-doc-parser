@@ -444,13 +444,8 @@ mod tests {
                 );
 
                 let mut wordcount: usize = 0;
-                let mut sorted_line_coords = filtered_lines
-                    .keys()
-                    .collect::<Vec<&ScreenplayCoordinate>>();
-                sorted_line_coords.sort_by(|a, b| (a.page, a.line).cmp(&(b.page, b.line)));
-                for coord in sorted_line_coords {
+                for (coord, f_line) in &filtered_lines {
                     let mut line_str = String::new();
-                    let f_line = filtered_lines[coord];
                     wordcount += f_line.text_elements.len();
                     //println!("WORDS FOR LINE: {:}", line.text_elements.len());
                     f_line

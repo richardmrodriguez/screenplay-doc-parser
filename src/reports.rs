@@ -250,18 +250,18 @@ pub fn get_all_locations_on_page_by_index(
 
 pub fn filter_lines_by_multiple_scenes<'a>(
     screenplay_document: &crate::screenplay_document::ScreenplayDocument,
-    lines: &HashMap<screenplay_document::ScreenplayCoordinate, &'a screenplay_document::Line>,
+    lines: &Vec<(screenplay_document::ScreenplayCoordinate, &'a screenplay_document::Line)>,
     scenes_filter: Vec<(&screenplay_document::SceneID, &screenplay_document::Scene)>,
-) -> Option<HashMap<screenplay_document::ScreenplayCoordinate, &'a screenplay_document::Line>> {
+) -> Option<Vec<(screenplay_document::ScreenplayCoordinate, &'a screenplay_document::Line)>> {
     if scenes_filter.is_empty() {
         //panic!("EMPTY FILTER!");
         return None;
     }
 
-    let mut scn_filtered_lines: HashMap<
-        screenplay_document::ScreenplayCoordinate,
-        &screenplay_document::Line,
-    > = HashMap::new();
+    let mut scn_filtered_lines: Vec<
+        (screenplay_document::ScreenplayCoordinate,
+        &screenplay_document::Line)
+    > = Vec::new();
 
     lines
         .iter()
@@ -279,7 +279,7 @@ pub fn filter_lines_by_multiple_scenes<'a>(
             false
         })
         .for_each(|(coord, line)| {
-            scn_filtered_lines.insert(coord.clone(), line);
+            scn_filtered_lines.push((coord.clone(), line));
         });
 
     if scn_filtered_lines.is_empty() {
@@ -295,9 +295,9 @@ pub fn filter_lines_by_multiple_scenes<'a>(
 
 pub fn filter_lines_by_multiple_locations<'a>(
     screenplay_doc: &'a screenplay_document::ScreenplayDocument,
-    lines: &HashMap<screenplay_document::ScreenplayCoordinate, &'a screenplay_document::Line>,
+    lines: &Vec<(screenplay_document::ScreenplayCoordinate, &'a screenplay_document::Line)>,
     locations_filter: Vec<&screenplay_document::LocationID>,
-) -> Option<HashMap<screenplay_document::ScreenplayCoordinate, &'a screenplay_document::Line>> {
+) -> Option<Vec<(screenplay_document::ScreenplayCoordinate, &'a screenplay_document::Line)>> {
     let Some(scenes_ordered) = get_all_scenes_ordered(screenplay_doc) else {
         return None;
     };
@@ -309,14 +309,16 @@ pub fn filter_lines_by_multiple_locations<'a>(
     return filter_lines_by_multiple_scenes(screenplay_doc, lines, scenes_filtered);
 }
 
+
+
 pub fn get_all_lines_of_dialogue_for_character<'a>(
     screenplay_document: &'a crate::screenplay_document::ScreenplayDocument,
     character: &'a screenplay_document::Character,
-) -> Option<HashMap<screenplay_document::ScreenplayCoordinate, &'a screenplay_document::Line>> {
-    let mut lines_with_coords: HashMap<
+) -> Option<Vec<(screenplay_document::ScreenplayCoordinate, &'a screenplay_document::Line)>> {
+    let mut lines_with_coords: Vec<(
         screenplay_document::ScreenplayCoordinate,
-        &screenplay_document::Line,
-    > = HashMap::new();
+        &screenplay_document::Line)
+    > = Vec::new();
     //let mut lines: Vec<&Line> = Vec::new();
     let mut is_dialogue = false;
 
@@ -340,13 +342,13 @@ pub fn get_all_lines_of_dialogue_for_character<'a>(
             }
             match line.line_type {
                 Some(SPType::SP_DIALOGUE) | Some(SPType::SP_DUAL_DIALOGUES) => {
-                    lines_with_coords.insert(
-                        screenplay_document::ScreenplayCoordinate {
+                    lines_with_coords.push(
+                        (screenplay_document::ScreenplayCoordinate {
                             page: p_index,
                             line: l_index,
                             element: None,
                         },
-                        line,
+                        line)
                     );
                 }
                 _ => {
