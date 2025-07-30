@@ -557,22 +557,21 @@ pub fn filter_scenes_by_locations<'a>(
     Some(filtered)
 }
 
-/// Gets a Vec of all Scenes s in the document, sorted by document order.
-///
-/// Returns a Vec<(&SceneID, &Scene)>.
+
+/// Returns a Vec<(&SceneID, &Scene)>, in document order.
 ///
 /// # Example
 ///
 /// ```rust
 /// use screenplay_doc_parser_rs::screenplay_document::*;
+/// use screenplay_doc_parser_rs::reports;
 /// let mut doc = ScreenplayDocument::new();
 /// let scene1: Scene = Scene {
 ///     start: ScreenplayCoordinate {page: 0 as usize, line: 10 as usize, element: None},
 ///     number: None,
 ///     revised: false,
 ///     environment: Environment::Int,
-///     story_location: Location::default(),
-///     story_sublocation: None,
+///     story_locations: vec!(LocationID::default()),
 ///     story_time_of_day: None
 /// };
 /// let scene2: Scene = Scene {
@@ -580,8 +579,7 @@ pub fn filter_scenes_by_locations<'a>(
 ///     number: None,
 ///     revised: false,
 ///     environment: Environment::Int,
-///     story_location: Location::default(),
-///     story_sublocation: None,
+///     story_locations: vec!(LocationID::default()),
 ///     story_time_of_day: None
 /// };
 /// let id_1 = SceneID::new();
@@ -589,10 +587,10 @@ pub fn filter_scenes_by_locations<'a>(
 /// doc.scenes.insert(id_2.clone(), scene2);
 /// doc.scenes.insert(id_1.clone(), scene1);
 ///
-/// let sorted = doc.get_all_scenes_sorted().unwrap();
+/// let sorted = reports::get_all_scenes_ordered(&doc).unwrap();
 ///
-/// assert_eq!(**sorted.get(0).unwrap(), id_1);
-/// assert_eq!(**sorted.get(1).unwrap(), id_2)
+/// assert_eq!(*sorted.get(0).unwrap().0, id_1);
+/// assert_eq!(*sorted.get(1).unwrap().0, id_2)
 /// ```
 ///
 pub fn get_all_scenes_ordered<'a>(
