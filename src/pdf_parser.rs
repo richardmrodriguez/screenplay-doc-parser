@@ -565,8 +565,8 @@ pub fn get_screenplay_doc_from_pdf_obj(
             let cur_y_pos = pdf_line.words.first().unwrap().position.y;
             if prev_line_y_pos > 1.0 {
                 let y_delta = prev_line_y_pos - cur_y_pos;
-                if y_delta > line_height {
-                    let blank_lines_count: u64 = (y_delta / line_height).ceil().round() as u64;
+                if y_delta > line_height { // 12.0 default...
+                    let blank_lines_count: u64 = (y_delta / line_height).ceil().round() as u64 - 1;
                     new_line.preceding_empty_lines = blank_lines_count;
                 }
             }

@@ -77,6 +77,52 @@ mod tests {
 
     #[cfg(feature = "mupdf-basic-parsing")]
     #[test]
+    fn test_mupdf_line_word_spacing() {
+        use mupdf_basic_parser;
+
+        let custom_indentations = ElementIndentationsInches::us_letter_default();
+        use crate::pdf_document::ElementIndentationsInches;
+        let screenplay_result = mupdf_basic_parser::get_screenplay_doc_from_filepath(
+            //"test_data/DraftTest_02.pdf".into(),
+            "test_data/VCR2L.pdf".into(),
+            Some(custom_indentations),
+            None,
+            None,
+            None,
+        );
+        let Ok(screenplay) = screenplay_result else {
+            println!("{:#?}", screenplay_result);
+            panic!();
+        };
+
+        for (pidx, page) in screenplay.pages.iter().enumerate() {
+            if pidx >= 3 {
+                break;
+            }
+            println!("Page: {}", pidx);
+            for line in &page.lines {
+                let mut text_str: String = String::new();
+                for te in &line.text_elements {
+                    if te.preceding_whitespace_chars > 0 {
+                        for n in 0..te.preceding_whitespace_chars {
+                            text_str.push(' ');
+                        }
+                    }
+                    text_str.push_str(&te.text);
+                }
+                println!(
+                    "    Pre-blank lns: {:>4} | y-pos: {:>6} | type: {:>24} |{}",
+                    line.preceding_empty_lines,
+                    format!("{:.2}",line.text_elements.iter().nth(0).unwrap().element_position.unwrap().y,),
+                    format!("{:?}", line.line_type),
+                    text_str
+                )
+            }
+        }
+    }
+
+    #[cfg(feature = "mupdf-basic-parsing")]
+    #[test]
     fn test_mupdf_parsing() {
         let start = Instant::now();
         use crate::reports;
@@ -84,9 +130,7 @@ mod tests {
         use std::time::Instant;
 
         let custom_indentations = ElementIndentationsInches::us_letter_default();
-        use crate::{
-            pdf_document::ElementIndentationsInches, screenplay_document::ScreenplayDocument,
-        };
+        use crate::pdf_document::ElementIndentationsInches;
         let screenplay_result = mupdf_basic_parser::get_screenplay_doc_from_filepath(
             //"test_data/DraftTest_02.pdf".into(),
             "test_data/VCR2L.pdf".into(),
