@@ -84,7 +84,8 @@ mod tests {
         use crate::pdf_document::ElementIndentationsInches;
         let screenplay_result = mupdf_basic_parser::get_screenplay_doc_from_filepath(
             //"test_data/DraftTest_02.pdf".into(),
-            "test_data/VCR2L.pdf".into(),
+            //"test_data/VCR2L.pdf".into(),
+            "/home/rich/Documents/test_pdfs/VCR2L-2024-04-04.pdf".into(),
             Some(custom_indentations),
             None,
             None,
